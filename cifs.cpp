@@ -28,12 +28,39 @@ SOFTWARE.
 #include <chrono>
 #include <iostream>
 #include <cassert>
+#include <cstring>
 
+#define TESTS_ENABLED
+#define TESTS_VERBOSE
+
+// ===--- MACROS ---===========================================================
+#define __MACROS
+
+// Time measurement
 #define GET_CURR_TIME std::chrono::system_clock::now()
 #define GET_TIME_DIFF(start, end) \
     std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()
 
+// Copies vector's data to array
+#define SCRAP_VECTOR(dst, vec, T)                  \
+    dst = ((T *)malloc((vec).size() * sizeof(T))); \
+    memcpy(dst, (vec).data(), (vec).size() * sizeof(T))
+
+// Preferrable allocators
+#define ALLOC(T, size) ((T *)malloc((size) * sizeof(T)))
+#define CALLOC(T, size) ((T *)calloc((size), sizeof(T)))
+
+// Common integer type (signed)
 #define int_t int
+
+// Strings
+#ifdef TESTS_VERBOSE
+#define PASSED_STR "===--> PASSED\n"
+#define FAILED_STR "===--> FAILED\n"
+#else
+#define PASSED_STR "PASSED\n"
+#define FAILED_STR "FAILED\n"
+#endif // TESTS_VERBOSE
 
 // ===--- ESSENTIALS ---========================================================
 #define __ESSENTIALS
@@ -125,13 +152,17 @@ int_t get_multiplicative_inverse(int_t k, int_t p)
 // ===--- RSA CIPHER ---========================================================
 #define __RSA_CIPHER
 
-int_t __rsa_N(int_t p, int_t q)
+int_t rsa_N(int_t p, int_t q)
 {
+    assert(is_prime(p) && "p must be prime");
+    assert(is_prime(q) && "q must be prime");
     return p * q;
 }
 
-int_t __rsa_t(int_t p, int_t q)
+int_t rsa_t(int_t p, int_t q)
 {
+    assert(is_prime(p) && "p must be prime");
+    assert(is_prime(q) && "q must be prime");
     return (p - 1) * (q - 1);
 }
 
@@ -165,9 +196,41 @@ int_t rsa_cif(int_t x, int_t key, int_t N)
     return pow_mod(x, key, N);
 }
 
+/*
+!! Allocates memory for the result
+*/
+void rsa_cif(int_t *data, size_t data_size,
+             int_t **cif, size_t *cif_size,
+             int_t key, int_t N)
+{
+    int_t *res = ALLOC(int_t, 2 * data_size);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        res[i] = rsa_cif(data[i], key, N);
+    }
+    *cif = res;
+    *cif_size = data_size;
+}
+
 int_t rsa_dcif(int_t x, int_t key, int_t N)
 {
     return pow_mod(x, key, N);
+}
+
+/*
+!! Allocates memory for the result
+*/
+void rsa_dcif(int_t *cif, size_t cif_size,
+              int_t **data, size_t *data_size,
+              int_t key, int_t N)
+{
+    int_t *res = ALLOC(int_t, cif_size);
+    for (size_t i = 0; i < cif_size; i++)
+    {
+        res[i] = rsa_dcif(cif[i], key, N);
+    }
+    *data = res;
+    *data_size = cif_size;
 }
 
 // ===--- ELGAMAL CIPHER ---====================================================
@@ -201,9 +264,41 @@ void elg_cif(int_t *a, int_t *b, int_t m, int_t key_y, int_t key_g, int_t p)
     *b = (m * pow_mod(key_y, k, p)) % p;
 }
 
+void elg_cif(int_t *data, size_t data_size,
+             int_t **cif, size_t *cif_size,
+             int_t key_y, int_t key_g, int_t p)
+{
+    int_t *res = ALLOC(int_t, data_size << 1);
+    int_t a, b;
+    for (size_t i = 0; i < data_size; i++)
+    {
+        elg_cif(&a, &b, data[i], key_y, key_g, p);
+        res[i << 1] = a;
+        res[(i << 1) + 1] = b;
+    }
+    *cif = res;
+    *cif_size = data_size << 1;
+}
+
 int_t elg_dcif(int_t a, int_t b, int_t key_x, int_t p)
 {
     return (b * pow_mod(a, p - 1 - key_x, p)) % p;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void elg_dcif(int_t *cif, size_t cif_size,
+              int_t **data, size_t *data_size,
+              int_t key_x, int_t p)
+{
+    int_t *res = ALLOC(int_t, cif_size >> 1);
+    for (size_t i = 0; i < cif_size; i += 2)
+    {
+        res[i >> 1] = elg_dcif(cif[i], cif[i + 1], key_x, p);
+    }
+    *data = res;
+    *data_size = cif_size >> 1;
 }
 
 // ===--- ELGAMAL SIGNATURE ---=================================================
@@ -231,20 +326,50 @@ int_t __elgsig_b(int_t m, int_t k, int_t x, int_t a, int_t p)
     return mmod >= 0 ? mmod : mmod + p - 1;
 }
 
-void elgsig_make_signature(int_t *a, int_t *b,
-                           int_t key_x, int_t key_g,
-                           int_t p, int_t m)
+void elgsig_make(int_t *a, int_t *b,
+                 int_t key_x, int_t key_g,
+                 int_t p, int_t m)
 {
     int_t k = __elgsig_k(p);
     *a = __elgsig_a(key_g, k, p);
     *b = __elgsig_b(m, k, key_x, *a, p);
 }
 
-bool elgsig_check_sig(int_t key_y, int_t key_g,
-                      int_t a, int_t b, int_t p, int_t m)
+void elgsig_make(int_t *data, size_t data_size,
+                 int_t **cif, size_t *cif_size,
+                 int_t key_y, int_t key_g, int_t p)
+{
+    int_t *res = ALLOC(int_t, data_size << 1);
+    int_t a, b;
+    for (size_t i = 0; i < data_size; i++)
+    {
+        elgsig_make(&a, &b, key_y, key_g, p, data[i]);
+        res[i << 1] = a;
+        res[(i << 1) + 1] = b;
+    }
+    *cif = res;
+    *cif_size = data_size << 1;
+}
+
+bool elgsig_check(int_t key_y, int_t key_g,
+                  int_t a, int_t b, int_t p, int_t m)
 {
     return (pow_mod(key_y, a, p) * pow_mod(a, b, p)) % p == pow_mod(
                                                                 key_g, m, p);
+}
+
+bool elgsig_check(int_t *cif, size_t cif_size,
+                  int_t key_y, int_t key_g, int_t p,
+                  int_t *data, size_t data_size)
+{
+    for (size_t i = 0; i < cif_size; i += 2)
+    {
+        if (!elgsig_check(key_y, key_g, cif[i], cif[i + 1], p, data[i >> 1]))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 // ===--- BENCHMARKS ---========================================================
@@ -261,8 +386,8 @@ void rsa_bench()
 
     srand(time(0));
     assert(is_prime(p) && is_prime(q) && "p and q must be prime");
-    int_t _N = __rsa_N(p, q);
-    int_t _t = __rsa_t(p, q);
+    int_t _N = rsa_N(p, q);
+    int_t _t = rsa_t(p, q);
     auto time = GET_CURR_TIME;
     int_t cif;
     for (int_t i = 0; i < epochs; i++)
@@ -439,7 +564,7 @@ void elgsig_bench()
     time = GET_CURR_TIME;
     for (int_t i = 0; i < sig_iter; i++)
     {
-        elgsig_make_signature(&a, &b, key_x, key_g, p, m);
+        elgsig_make(&a, &b, key_x, key_g, p, m);
     }
     auto sig_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     auto total_t = GET_TIME_DIFF(total_start, GET_CURR_TIME);
@@ -467,15 +592,328 @@ void elgsig_bench()
     printf("sig_t\t\xB3%.6fms\n",
            float(sig_time) / 1000000 / sig_iter);
     printf("\ncheck\t\xB3");
-    std::cout << elgsig_check_sig(key_y, key_g, a, b, p, m) << std::endl;
+    std::cout << elgsig_check(key_y, key_g, a, b, p, m) << std::endl;
     printf("\ntotal_t\t\xB3%.6fms\n\n",
            float(total_t) / 1000000);
 }
 
+// ===--- SERVICE ---===========================================================
+#define __SERVICE
+
+int_t hex_num_len(int_t num)
+{
+    int_t res = 1;
+    while (num > 15)
+    {
+        num >>= 4;
+        res++;
+    }
+    return res;
+}
+
+int_t dec_num_len(int_t num)
+{
+    int_t res = 1;
+    while (num > 9)
+    {
+        num /= 10;
+        res++;
+    }
+    return res;
+}
+
+void dump_data_to_dec_file(int_t *data, size_t data_size,
+                           int_t N, const char *file_name)
+{
+    size_t num_len = dec_num_len(N);
+    FILE *file = fopen(file_name, "w");
+    for (size_t i = 0; i < data_size; i++)
+    {
+        for (size_t j = 0; j < num_len - dec_num_len(data[i]); j++)
+        {
+            fprintf(file, "0");
+        }
+        fprintf(file, "%d", data[i]);
+    }
+    fclose(file);
+}
+
+void dump_data_to_hex_file(int_t *data, size_t data_size, int_t N,
+                           const char *file_name)
+{
+    size_t num_len = hex_num_len(N);
+    FILE *file = fopen(file_name, "w");
+    for (size_t i = 0; i < data_size; i++)
+    {
+        fprintf(file, "%0*X", num_len, data[i]);
+    }
+    fclose(file);
+}
+
+void dump_data_to_bin_file(int_t *data, size_t data_size, const char *file_name)
+{
+    FILE *file = fopen(file_name, "wb");
+    fwrite(data, sizeof(int_t), data_size, file);
+    fclose(file);
+}
+
+/*
+!! Allocates memory for the result
+*/
+void read_dump_from_dec_file(int_t **data, size_t *data_size, int_t N,
+                             const char *file_name)
+{
+    FILE *file = fopen(file_name, "r");
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    char *buffer = (char *)malloc(file_size);
+    fread(buffer, 1, file_size, file);
+    fclose(file);
+    size_t num_len = dec_num_len(N);
+    size_t num_count = file_size / num_len;
+    int_t *res = (int_t *)malloc(num_count * sizeof(int_t));
+    for (size_t i = 0; i < num_count; i++)
+    {
+        int_t num = 0;
+        for (size_t j = 0; j < num_len; j++)
+        {
+            num = num * 10 + buffer[i * num_len + j] - '0';
+        }
+        res[i] = num;
+    }
+    *data = res;
+    *data_size = num_count;
+    free(buffer);
+}
+
+/*
+!! Allocates memory for the result
+*/
+void read_dump_from_hex_file(int_t **data, size_t *data_size, int_t N,
+                             const char *file_name)
+{
+    FILE *file = fopen(file_name, "r");
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    char *buffer = (char *)malloc(file_size);
+    fread(buffer, 1, file_size, file);
+    fclose(file);
+    size_t num_len = hex_num_len(N);
+    size_t num_count = file_size / num_len;
+    int_t *res = (int_t *)malloc(num_count * sizeof(int_t));
+    for (size_t i = 0; i < num_count; i++)
+    {
+        int_t num = 0;
+        for (size_t j = 0; j < num_len; j++)
+        {
+            num = (num << 4) + buffer[i * num_len + j] - '0' -
+                  ((int_t)((buffer[i * num_len + j] >= 'A') &&
+                           (buffer[i * num_len + j] <= 'F')) *
+                   7) -
+                  ((int_t)((buffer[i * num_len + j] >= 'a') &&
+                           (buffer[i * num_len + j] <= 'f')) *
+                   39);
+        }
+        res[i] = num;
+    }
+    *data = res;
+    *data_size = num_count;
+    free(buffer);
+}
+
+/*
+!! Allocates memory for the result
+*/
+void read_dump_from_bin_file(int_t **data, size_t *data_size, const char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    int_t *res = (int_t *)malloc(file_size);
+    fread(res, sizeof(int_t), file_size / sizeof(int_t), file);
+    fclose(file);
+    *data = res;
+    *data_size = file_size / sizeof(int_t);
+}
+
+void print_array(int_t *data, size_t data_size)
+{
+    std::cout << "[";
+    for (size_t i = 0; i < data_size - 1; i++)
+    {
+        std::cout << data[i] << ", ";
+    }
+    std::cout << data[data_size - 1] << "]" << std::endl;
+}
+
+bool cmp_arrays(int_t *arr1, size_t arr1_size, int_t *arr2, size_t arr2_size)
+{
+    if (arr1_size != arr2_size)
+    {
+        return false;
+    }
+    for (size_t i = 0; i < arr1_size; i++)
+    {
+        if (arr1[i] != arr2[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// ===--- TESTS ---=============================================================
+#define __TESTS
+
+#ifdef TESTS_ENABLED
+
+void test_rsa_array()
+{
+    int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    size_t data_size = sizeof(data) / sizeof(data[0]);
+    int_t *cif;
+    size_t cif_size;
+    int_t *dec;
+    size_t dec_size;
+
+    int_t p = 13;
+    int_t q = 113;
+    int_t N = rsa_N(p, q);
+    int_t t = rsa_t(p, q);
+    int_t cif_key = rsa_cif_key(t);
+    int_t dcif_key = rsa_dcif_key(cif_key, t);
+
+    printf("TEST RSA ARRAY: ");
+    rsa_cif(data, data_size, &cif, &cif_size, cif_key, N);
+    rsa_dcif(cif, cif_size, &dec, &dec_size, dcif_key, N);
+    bool res = cmp_arrays(data, data_size, dec, dec_size);
+
+#ifdef TESTS_VERBOSE
+    printf("\nraw\t\xB3");
+    print_array(data, data_size);
+    printf("p\t\xB3");
+    std::cout << p << std::endl;
+    printf("q\t\xB3");
+    std::cout << q << std::endl;
+    printf("N\t\xB3");
+    std::cout << N << std::endl;
+    printf("t\t\xB3");
+    std::cout << t << std::endl;
+    printf("c_key\t\xB3");
+    std::cout << cif_key << std::endl;
+    printf("d_key\t\xB3");
+    std::cout << dcif_key << std::endl;
+    printf("cif\t\xB3");
+    print_array(cif, cif_size);
+    printf("dcif\t\xB3");
+    print_array(dec, dec_size);
+#endif // TESTS_VERBOSE
+    printf(res ? PASSED_STR : FAILED_STR);
+#ifdef TESTS_VERBOSE
+    printf("\n");
+#endif // TESTS_VERBOSE
+
+    free(cif);
+    free(dec);
+}
+
+void test_elg_array()
+{
+    int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    size_t data_size = sizeof(data) / sizeof(data[0]);
+    int_t *cif;
+    size_t cif_size;
+    int_t *dec;
+    size_t dec_size;
+
+    int_t p = 503;
+
+    int_t key_x, key_y, key_g;
+
+    elg_make_private_key(&key_x, p);
+    elg_make_public_key(&key_y, &key_g, key_x, p);
+    elg_cif(data, data_size, &cif, &cif_size, key_y, key_g, p);
+    elg_dcif(cif, cif_size, &dec, &dec_size, key_x, p);
+    bool res = cmp_arrays(data, data_size, dec, dec_size);
+
+    printf("TEST ELG ARRAY: ");
+#ifdef TESTS_VERBOSE
+    printf("\nraw\t\xB3");
+    print_array(data, data_size);
+    printf("p\t\xB3");
+    std::cout << p << std::endl;
+    printf("x\t\xB3");
+    std::cout << key_x << std::endl;
+    printf("y\t\xB3");
+    std::cout << key_y << std::endl;
+    printf("g\t\xB3");
+    std::cout << key_g << std::endl;
+    printf("cif\t\xB3");
+    print_array(cif, cif_size);
+    printf("dcif\t\xB3");
+    print_array(dec, dec_size);
+#endif // TESTS_VERBOSE
+    printf(res ? PASSED_STR : FAILED_STR);
+#ifdef TESTS_VERBOSE
+    printf("\n");
+#endif // TESTS_VERBOSE
+
+    free(cif);
+    free(dec);
+}
+
+void test_elgsig_array()
+{
+    int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    size_t data_size = sizeof(data) / sizeof(data[0]);
+    int_t *cif;
+    size_t cif_size;
+
+    int_t p = 503;
+
+    int_t key_x, key_y, key_g;
+
+    elg_make_private_key(&key_x, p);
+    elg_make_public_key(&key_y, &key_g, key_x, p);
+    elgsig_make(data, data_size, &cif, &cif_size, key_x, key_g, p);
+    bool res = elgsig_check(cif, cif_size, key_y, key_g, p, data, data_size);
+
+    printf("TEST ELGSIG ARRAY: ");
+#ifdef TESTS_VERBOSE
+    printf("\nraw\t\xB3");
+    print_array(data, data_size);
+    printf("p\t\xB3");
+    std::cout << p << std::endl;
+    printf("x\t\xB3");
+    std::cout << key_x << std::endl;
+    printf("y\t\xB3");
+    std::cout << key_y << std::endl;
+    printf("g\t\xB3");
+    std::cout << key_g << std::endl;
+    printf("cif\t\xB3");
+    print_array(cif, cif_size);
+#endif // TESTS_VERBOSE
+    printf(res ? PASSED_STR : FAILED_STR);
+#ifdef TESTS_VERBOSE
+    printf("\n");
+#endif // TESTS_VERBOSE
+
+    free(cif);
+}
+
+#endif // TESTS_ENABLED
+
 int main()
 {
-    rsa_bench();
-    elg_bench();
-    elgsig_bench();
+
+    test_rsa_array();
+    test_elg_array();
+    test_elgsig_array();
+    // rsa_bench();
+    // elg_bench();
+    // elgsig_bench();
     return 0;
 }

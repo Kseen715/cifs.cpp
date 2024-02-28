@@ -1,18 +1,18 @@
-CPPC=g++
+CPPC = g++
 CFLAGS = -c -Wall -fPIC -O3
-build_dir=build
+build_dir = build
 
 ifeq ($(OS),Windows_NT)
 RM = del /Q
 COPY = copy
-SYS = -D _WIN32 -O3
+SYS_FLAGS = -D _WIN32
 EXE_EXTENSION = .exe
 ECHO = echo
 SYS_MSG = "Windows_NT detected!"
 else
 RM = rm -rf
 COPY = cp
-SYS = 
+SYS_FLAGS = 
 EXE_EXTENSION =
 ECHO = echo -e
 SYS_MSG = "Linux detected!"
@@ -23,7 +23,7 @@ run: build
 
 build: make_build_dir cifs.cpp
 	$(ECHO) $(SYS_MSG)
-	$(CPPC) $(CFLAGS) -I . -c cifs.cpp
+	$(CPPC) $(CFLAGS) $(SYS_FLAGS) -I . -c cifs.cpp
 	$(CPPC) -o $(build_dir)/cifs$(EXE_EXTENSION) cifs.o
 	$(RM) cifs.o
 
