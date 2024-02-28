@@ -1,5 +1,5 @@
 CPPC=g++
-CFLAGS = -c -Wall -fPIC
+CFLAGS = -c -Wall -fPIC -O3
 build_dir=build
 
 ifeq ($(OS),Windows_NT)
@@ -18,13 +18,13 @@ ECHO = echo -e
 SYS_MSG = "Linux detected!"
 endif
 
-run: main
+run: build
 	$(build_dir)/cifs.exe
 
-main: make_build_dir cifs.cpp
+build: make_build_dir cifs.cpp
 	$(ECHO) $(SYS_MSG)
-	$(CPPC) $(CFLAGS) -I . -c cifs.cpp -O3
-	$(CPPC) -o $(build_dir)/cifs.exe cifs.o
+	$(CPPC) $(CFLAGS) -I . -c cifs.cpp
+	$(CPPC) -o $(build_dir)/cifs$(EXE_EXTENSION) cifs.o
 	$(RM) cifs.o
 
 make_build_dir:
