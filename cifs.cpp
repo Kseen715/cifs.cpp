@@ -30,7 +30,10 @@ SOFTWARE.
 #include <cassert>
 #include <cstring>
 
+// Is tests to compile
 #define TESTS_ENABLED
+
+// Is tests & benchmarks verbose
 #define TESTS_VERBOSE
 
 // ===--- MACROS ---===========================================================
@@ -55,10 +58,12 @@ SOFTWARE.
 
 // Strings
 #ifdef TESTS_VERBOSE
-#define PASSED_STR "===--> PASSED\n"
-#define FAILED_STR "===--> FAILED\n"
+#define PASSED_STR "===--> PASSED\n\n"
+#define PASSED_TIME_FMT "===--> PASSED: %.6fms\n\n"
+#define FAILED_STR "===--> FAILED\n\n"
 #else
 #define PASSED_STR "PASSED\n"
+#define PASSED_TIME_FMT "PASSED: %.6fms\n"
 #define FAILED_STR "FAILED\n"
 #endif // TESTS_VERBOSE
 
@@ -380,7 +385,7 @@ bool elgsig_check(int_t *cif, size_t cif_size,
 
 void rsa_bench()
 {
-    std::cout << "RSA BENCHMARK" << std::endl;
+    std::cout << "RSA BENCHMARK: ";
     auto bench_time = GET_CURR_TIME;
     int_t epochs = 200;
     int_t enc_epochs = 2000;
@@ -397,7 +402,10 @@ void rsa_bench()
     {
         cif = rsa_cif_key(_t);
     }
+
+#ifdef TESTS_VERBOSE
     auto rsa_cif_t = GET_TIME_DIFF(time, GET_CURR_TIME);
+#endif // TESTS_VERBOSE
 
     cif = _N / 2;
     while (!is_prime(cif))
@@ -411,8 +419,33 @@ void rsa_bench()
     {
         dcif = rsa_dcif_key(cif, _t);
     }
+
+#ifdef TESTS_VERBOSE
     auto rsa_dcif_t = GET_TIME_DIFF(time, GET_CURR_TIME);
-    printf("p\t\xB3");
+#endif // TESTS_VERBOSE
+
+    int num = 123;
+    time = GET_CURR_TIME;
+    int_t encd;
+    for (int_t i = 0; i < enc_epochs; i++)
+    {
+        encd = rsa_cif(num, cif, _N);
+    }
+
+#ifdef TESTS_VERBOSE
+    auto encd_t = GET_TIME_DIFF(time, GET_CURR_TIME);
+#endif // TESTS_VERBOSE
+
+    time = GET_CURR_TIME;
+    int_t decd;
+    for (int_t i = 0; i < enc_epochs; i++)
+    {
+        decd = rsa_dcif(encd, dcif, _N);
+    }
+
+#ifdef TESTS_VERBOSE
+    auto decd_t = GET_TIME_DIFF(time, GET_CURR_TIME);
+    printf("\np\t\xB3");
     std::cout << p << std::endl;
     printf("q\t\xB3");
     std::cout << q << std::endl;
@@ -430,24 +463,6 @@ void rsa_bench()
            float(rsa_dcif_t) / 1000000 / epochs);
     printf("sum_t\t\xB3%.6fms\n",
            float(rsa_dcif_t + rsa_cif_t) / 1000000 / epochs);
-
-    int num = 123;
-    time = GET_CURR_TIME;
-    int_t encd;
-    for (int_t i = 0; i < enc_epochs; i++)
-    {
-        encd = rsa_cif(num, cif, _N);
-    }
-
-    auto encd_t = GET_TIME_DIFF(time, GET_CURR_TIME);
-    time = GET_CURR_TIME;
-    int_t decd;
-    for (int_t i = 0; i < enc_epochs; i++)
-    {
-        decd = rsa_dcif(encd, dcif, _N);
-    }
-    auto decd_t = GET_TIME_DIFF(time, GET_CURR_TIME);
-
     printf("\nnum\t\xB3");
     std::cout << num << std::endl;
     printf("enc\t\xB3");
@@ -460,13 +475,14 @@ void rsa_bench()
            float(decd_t) / 1000000 / enc_epochs);
     printf("sum_t\t\xB3%.6fms\n",
            float(decd_t + encd_t) / 1000000 / enc_epochs);
-    printf("\ntotal_t\t\xB3%.6fms\n\n",
-           float(GET_TIME_DIFF(bench_time, GET_CURR_TIME)) / 1000000);
+#endif // TESTS_VERBOSE
+    bool res = decd == num;
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(GET_TIME_DIFF(bench_time, GET_CURR_TIME)) / 1000000);
 }
 
 void elg_bench()
 {
-    std::cout << "ELGAMAL CIPHER BENCHMARK" << std::endl;
+    std::cout << "ELG BENCHMARK: ";
     srand(time(0));
     int_t p = 503;
     int_t m = 20;
@@ -480,33 +496,51 @@ void elg_bench()
 
     auto total_start = GET_CURR_TIME;
     int_t key_x, key_y, key_g, a, b, decd;
+
+#ifdef TESTS_VERBOSE
     auto time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
+
     for (int_t i = 0; i < pr_k_iter; i++)
     {
         elg_make_private_key(&key_x, p);
     }
+
+#ifdef TESTS_VERBOSE
     auto pr_k_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
+
     for (int_t i = 0; i < pu_k_iter; i++)
     {
         elg_make_public_key(&key_y, &key_g, key_x, p);
     }
+
+#ifdef TESTS_VERBOSE
     auto pu_k_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
+
     for (int_t i = 0; i < cif_iter; i++)
     {
         elg_cif(&a, &b, m, key_y, key_g, p);
     }
+
+#ifdef TESTS_VERBOSE
     auto cif_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
+
     for (int_t i = 0; i < dcif_iter; i++)
     {
         decd = elg_dcif(a, b, key_x, p);
     }
-    auto decd_t = GET_TIME_DIFF(time, GET_CURR_TIME);
+
     auto total_t = GET_TIME_DIFF(total_start, GET_CURR_TIME);
 
-    printf("p\t\xB3");
+#ifdef TESTS_VERBOSE
+    auto decd_t = GET_TIME_DIFF(time, GET_CURR_TIME);
+    printf("\np\t\xB3");
     std::cout << p << std::endl;
     printf("m\t\xB3");
     std::cout << m << std::endl;
@@ -532,13 +566,15 @@ void elg_bench()
     std::cout << decd << std::endl;
     printf("dec_t\t\xB3%.6fms\n",
            float(decd_t) / 1000000 / dcif_iter);
-    printf("\ntotal_t\t\xB3%.6fms\n\n",
-           float(total_t) / 1000000);
+#endif // TESTS_VERBOSE
+
+    bool res = decd == m;
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1000000);
 }
 
 void elgsig_bench()
 {
-    std::cout << "ELGAMAL SIGNATURE BENCHMARK" << std::endl;
+    std::cout << "ELGSIG BENCHMARK: ";
     srand(time(0));
 
     int pr_k_iter = 20000000;
@@ -552,27 +588,38 @@ void elgsig_bench()
 
     int_t key_x, key_y, key_g, a, b;
     auto total_start = GET_CURR_TIME;
+#ifdef TESTS_VERBOSE
     auto time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
     for (int_t i = 0; i < pr_k_iter; i++)
     {
         elg_make_private_key(&key_x, p);
     }
+
+#ifdef TESTS_VERBOSE
     auto pr_k_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
+
     for (int_t i = 0; i < pu_k_iter; i++)
     {
         elg_make_public_key(&key_y, &key_g, key_x, p);
     }
+
+#ifdef TESTS_VERBOSE
     auto pu_k_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     time = GET_CURR_TIME;
+#endif // TESTS_VERBOSE
+
     for (int_t i = 0; i < sig_iter; i++)
     {
         elgsig_make(&a, &b, key_x, key_g, p, m);
     }
-    auto sig_time = GET_TIME_DIFF(time, GET_CURR_TIME);
     auto total_t = GET_TIME_DIFF(total_start, GET_CURR_TIME);
 
-    printf("p\t\xB3");
+#ifdef TESTS_VERBOSE
+    auto sig_time = GET_TIME_DIFF(time, GET_CURR_TIME);
+    printf("\np\t\xB3");
     std::cout << p << std::endl;
     printf("m\t\xB3");
     std::cout << m << std::endl;
@@ -594,10 +641,10 @@ void elgsig_bench()
     std::cout << b << std::endl;
     printf("sig_t\t\xB3%.6fms\n",
            float(sig_time) / 1000000 / sig_iter);
-    printf("\ncheck\t\xB3");
-    std::cout << elgsig_check(key_y, key_g, a, b, p, m) << std::endl;
-    printf("\ntotal_t\t\xB3%.6fms\n\n",
-           float(total_t) / 1000000);
+
+#endif // TESTS_VERBOSE
+    bool res = elgsig_check(key_y, key_g, a, b, p, m);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1000000);
 }
 
 // ===--- SERVICE ---===========================================================
@@ -771,7 +818,13 @@ bool cmp_arrays(int_t *arr1, size_t arr1_size, int_t *arr2, size_t arr2_size)
 // ===--- TESTS ---=============================================================
 #define __TESTS
 
-#ifdef TESTS_ENABLED
+#ifndef TESTS_ENABLED
+
+void test_rsa_array(){};
+void test_elg_array(){};
+void test_elgsig_array(){};
+
+#else // TESTS_ENABLES
 
 void test_rsa_array()
 {
@@ -815,9 +868,6 @@ void test_rsa_array()
     print_array(dec, dec_size);
 #endif // TESTS_VERBOSE
     printf(res ? PASSED_STR : FAILED_STR);
-#ifdef TESTS_VERBOSE
-    printf("\n");
-#endif // TESTS_VERBOSE
 
     free(cif);
     free(dec);
@@ -860,9 +910,6 @@ void test_elg_array()
     print_array(dec, dec_size);
 #endif // TESTS_VERBOSE
     printf(res ? PASSED_STR : FAILED_STR);
-#ifdef TESTS_VERBOSE
-    printf("\n");
-#endif // TESTS_VERBOSE
 
     free(cif);
     free(dec);
@@ -900,9 +947,6 @@ void test_elgsig_array()
     print_array(cif, cif_size);
 #endif // TESTS_VERBOSE
     printf(res ? PASSED_STR : FAILED_STR);
-#ifdef TESTS_VERBOSE
-    printf("\n");
-#endif // TESTS_VERBOSE
 
     free(cif);
 }
@@ -911,12 +955,11 @@ void test_elgsig_array()
 
 int main()
 {
-
     test_rsa_array();
     test_elg_array();
     test_elgsig_array();
-    // rsa_bench();
-    // elg_bench();
-    // elgsig_bench();
+    rsa_bench();
+    elg_bench();
+    elgsig_bench();
     return 0;
 }
