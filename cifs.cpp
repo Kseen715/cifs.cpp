@@ -264,6 +264,9 @@ void elg_cif(int_t *a, int_t *b, int_t m, int_t key_y, int_t key_g, int_t p)
     *b = (m * pow_mod(key_y, k, p)) % p;
 }
 
+/*
+!! Allocates memory for the result
+*/
 void elg_cif(int_t *data, size_t data_size,
              int_t **cif, size_t *cif_size,
              int_t key_y, int_t key_g, int_t p)
