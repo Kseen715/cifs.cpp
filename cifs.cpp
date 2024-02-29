@@ -30,11 +30,15 @@ SOFTWARE.
 #include <cassert>
 #include <cstring>
 
+// #define ADD_EXPORTS
+// #define IMECLUI_IMPLEMENTATION
+#include "imeclui.h"
+
 // Is tests to compile
 #define TESTS_ENABLED
 
 // Is tests & benchmarks verbose
-#define TESTS_VERBOSE
+// #define TESTS_VERBOSE
 
 // ===--- MACROS ---===========================================================
 #define __MACROS
@@ -58,13 +62,19 @@ SOFTWARE.
 
 // Strings
 #ifdef TESTS_VERBOSE
-#define PASSED_STR "===--> PASSED\n\n"
-#define PASSED_TIME_FMT "===--> PASSED: %.6fms\n\n"
-#define FAILED_STR "===--> FAILED\n\n"
+#define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
+    "===--> PASSED\n\n" IME_ESC IME_RESET IME_ESC_END
+#define PASSED_TIME_FMT IME_ESC IME_GREEN IME_ESC_END \
+    "===--> PASSED: %.6fms\n\n" IME_ESC IME_RESET IME_ESC_END
+#define FAILED_STR IME_ESC IME_RED IME_ESC_END \
+    "===--> FAILED\n\n" IME_ESC IME_RESET IME_ESC_END
 #else
-#define PASSED_STR "PASSED\n"
-#define PASSED_TIME_FMT "PASSED: %.6fms\n"
-#define FAILED_STR "FAILED\n"
+#define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
+    "PASSED\n" IME_ESC IME_RESET IME_ESC_END
+#define PASSED_TIME_FMT IME_ESC IME_GREEN IME_ESC_END \
+    "PASSED: %.6fms\n" IME_ESC IME_RESET IME_ESC_END
+#define FAILED_STR IME_ESC IME_RED IME_ESC_END \
+    "FAILED\n" IME_ESC IME_RESET IME_ESC_END
 #endif // TESTS_VERBOSE
 
 // ===--- ESSENTIALS ---========================================================
