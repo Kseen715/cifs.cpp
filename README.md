@@ -22,13 +22,23 @@ After building the project, you can run the program using the following command:
 
 ## Screenshots
 
+Main screen:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_enter.png?raw=true"/>
+RSA mode selection:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_enter.png?raw=true"/>
+RSA text encoding:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_cif_text.png?raw=true"/>
+RSA text encoding via existing key:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_cif_key.png?raw=true"/>
+RSA numbers encoding:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_cif_nums.png?raw=true"/>
+RSA decoding:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_dcif.png?raw=true"/>
+ElGamal mode selection:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_enter.png?raw=true"/>
+ElGamal signing:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_cif.png?raw=true"/>
+ElGamal valid signature:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_valid.png?raw=true"/>
+ElGamal invalid signature:
 <img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_invalid.png?raw=true"/>
