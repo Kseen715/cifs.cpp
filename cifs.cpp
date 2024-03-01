@@ -1490,7 +1490,7 @@ int main()
     case 1:
     {
         printf(RSA_STR);
-        printf("===--- MODES ---===\n");
+        printf("===--- MODES \n");
         printf("  1) Generate keys & Encode\n");
         printf("  2) Enter key & Encode\n");
         printf("  3) Decode\n");
@@ -1527,7 +1527,7 @@ int main()
     case 2:
     {
         printf(ELGAMAL_STR);
-        printf("===--- MODES ---===\n");
+        printf("===--- MODES \n");
         printf("  1) Generate keys & Encode\n");
         printf("  2) Enter key & Encode\n");
         printf("  3) Decode\n");
@@ -1564,7 +1564,7 @@ int main()
     case 3:
     {
         printf(ELGSIG_STR);
-        printf("===--- MODES ---===\n");
+        printf("===--- MODES \n");
         printf("  1) Generate keys & Sign\n");
         printf("  2) Enter key & Sign\n");
         printf("  3) Check sign\n");
