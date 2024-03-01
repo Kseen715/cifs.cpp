@@ -153,8 +153,8 @@ extern "C"
     ADDAPI void ADDCALL ime_fill_rect(Cell *cell, size_t lu_x, size_t lu_y,
                                       size_t rb_x, size_t rb_y);
 
-    ADDAPI Cell ADDCALL *ime_alloc_cell(char symbol, char *fg_color,
-                                        char *bg_color, short style);
+    ADDAPI Cell ADDCALL *ime_alloc_cell(char symbol, const char *fg_color,
+                                        const char *bg_color, short style);
     ADDAPI void ADDCALL ime_free_cell(Cell *cell);
     ADDAPI void ADDCALL __ime_log_cell(Cell *cell);
 
@@ -247,7 +247,7 @@ extern "C"
 #endif // _WIN32
     }
 
-    ADDAPI Cell ADDCALL *ime_alloc_cell(char symbol, char *fg_color, char *bg_color, short style)
+    ADDAPI Cell ADDCALL *ime_alloc_cell(char symbol, const char *fg_color, const char *bg_color, short style)
     {
         Cell *cell = (Cell *)malloc(sizeof(Cell));
         cell->fg_color = (char *)malloc(__IME_COLOR_STR_BUFFER_SIZE);
@@ -440,9 +440,9 @@ extern "C"
         ime_move_cursor(lu_x, lu_y);
         size_t width = rb_x - lu_x;
         size_t height = rb_y - lu_y;
-        for (int y = 0; y < height; y++)
+        for (unsigned y = 0; y < height; y++)
         {
-            for (int x = 0; x < width; x++)
+            for (unsigned x = 0; x < width; x++)
             {
                 size_t curr_x = lu_x + x;
                 size_t curr_y = lu_y + y;
@@ -503,9 +503,9 @@ extern "C"
     {
         size_t width = rb_x - lu_x;
         size_t height = rb_y - lu_y;
-        for (int y = 0; y < height; y++)
+        for (unsigned y = 0; y < height; y++)
         {
-            for (int x = 0; x < width; x++)
+            for (unsigned x = 0; x < width; x++)
             {
                 size_t curr_x = lu_x + x;
                 size_t curr_y = lu_y + y;
@@ -526,9 +526,9 @@ extern "C"
         char right_up = 0xBF;
         size_t width = rb_x - lu_x;
         size_t height = rb_y - lu_y;
-        for (int y = 0; y < height; y++)
+        for (unsigned y = 0; y < height; y++)
         {
-            for (int x = 0; x < width; x++)
+            for (unsigned x = 0; x < width; x++)
             {
                 size_t curr_x = lu_x + x;
                 size_t curr_y = lu_y + y;
@@ -572,9 +572,9 @@ extern "C"
         char right_up = 0xBB;
         size_t width = rb_x - lu_x;
         size_t height = rb_y - lu_y;
-        for (int y = 0; y < height; y++)
+        for (unsigned y = 0; y < height; y++)
         {
-            for (int x = 0; x < width; x++)
+            for (unsigned x = 0; x < width; x++)
             {
                 size_t curr_x = lu_x + x;
                 size_t curr_y = lu_y + y;
@@ -617,14 +617,14 @@ extern "C"
     {
         if (lu_x == rb_x)
         {
-            for (int i = lu_y; i < rb_y; i++)
+            for (unsigned i = lu_y; i < rb_y; i++)
             {
                 buf->cells[lu_x * buf->rows + i]->symbol = 0xB3;
             }
         }
         else if (lu_y == rb_y)
         {
-            for (int i = lu_x; i < rb_x; i++)
+            for (unsigned i = lu_x; i < rb_x; i++)
             {
                 buf->cells[i * buf->rows + lu_y]->symbol = 0xC4;
             }

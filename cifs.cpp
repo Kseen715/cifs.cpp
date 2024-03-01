@@ -30,28 +30,26 @@ SOFTWARE.
 #include <cassert>
 #include <cstring>
 
-// #define ADD_EXPORTS
-// #define IMECLUI_IMPLEMENTATION
+#define ADD_EXPORTS
+#define IMECLUI_IMPLEMENTATION
 #include "imeclui.h"
+
+// ===--- CONFIG ---============================================================
+#define __CONFIG
 
 // Is tests to compile
 #define TESTS_ENABLED
 
 // Is tests & benchmarks verbose
-// #define TESTS_VERBOSE
+#define TESTS_VERBOSE
 
-// ===--- MACROS ---===========================================================
+// ===--- MACROS ---============================================================
 #define __MACROS
 
 // Time measurement
 #define GET_CURR_TIME std::chrono::system_clock::now()
 #define GET_TIME_DIFF(start, end) \
     std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()
-
-// Copies vector's data to array
-#define SCRAP_VECTOR(dst, vec, T)                  \
-    dst = ((T *)malloc((vec).size() * sizeof(T))); \
-    memcpy(dst, (vec).data(), (vec).size() * sizeof(T))
 
 // Preferrable allocators
 #define ALLOC(T, size) ((T *)malloc((size) * sizeof(T)))
@@ -60,21 +58,46 @@ SOFTWARE.
 // Common integer type (signed)
 #define int_t int
 
+// Copies vector's data to array
+#define SCRAP_VECTOR(dst, vec, T) \
+    dst = ALLOC(T, (vec).size()); \
+    memcpy(dst, (vec).data(), (vec).size() * sizeof(T))
+
+// Colors
+#define C_RESET IME_ESC IME_RESET IME_ESC_END
+#define C_RED IME_ESC IME_RED IME_ESC_END
+#define C_GREEN IME_ESC IME_GREEN IME_ESC_END
+#define C_CYAN IME_ESC IME_RGB_COLOR(0, 200, 180) IME_ESC_END
+#define C_DIMM IME_ESC IME_BRIGHT_BLACK IME_ESC_END
+
 // Strings
+#define TESTS_STR IME_ESC IME_RGB_COLOR(255, 255, 100) IME_ESC_END \
+    "TESTS:" C_RESET "\n"
+#define INPUT_STR "\n" C_DIMM "Input:" C_RESET " "
+#define INVALID_INPUT_STR \
+    C_RED                 \
+    "Invalid input" C_RESET "\n"
+#define RSA_STR IME_ESC IME_RGB_COLOR(100, 100, 255) IME_ESC_END \
+    "RSA:" C_RESET "\n"
+#define ELGAMAL_STR IME_ESC IME_RGB_COLOR(100, 255, 100) IME_ESC_END \
+    "ElGamal:" C_RESET "\n"
+#define ELGSIG_STR IME_ESC IME_RGB_COLOR(255, 85, 0) IME_ESC_END \
+    "ElGamal Signature:" C_RESET "\n"
+
 #ifdef TESTS_VERBOSE
 #define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
-    "===--> PASSED\n\n" IME_ESC IME_RESET IME_ESC_END
+    "===--> PASSED\n\n" C_RESET
 #define PASSED_TIME_FMT IME_ESC IME_GREEN IME_ESC_END \
-    "===--> PASSED: %.6fms\n\n" IME_ESC IME_RESET IME_ESC_END
+    "===--> PASSED: %.6fms\n\n" C_RESET
 #define FAILED_STR IME_ESC IME_RED IME_ESC_END \
-    "===--> FAILED\n\n" IME_ESC IME_RESET IME_ESC_END
+    "===--> FAILED\n\n" C_RESET
 #else
 #define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
-    "PASSED\n" IME_ESC IME_RESET IME_ESC_END
+    "PASSED\n" C_RESET
 #define PASSED_TIME_FMT IME_ESC IME_GREEN IME_ESC_END \
-    "PASSED: %.6fms\n" IME_ESC IME_RESET IME_ESC_END
+    "PASSED: %.6fms\n" C_RESET
 #define FAILED_STR IME_ESC IME_RED IME_ESC_END \
-    "FAILED\n" IME_ESC IME_RESET IME_ESC_END
+    "FAILED\n" C_RESET
 #endif // TESTS_VERBOSE
 
 // ===--- ESSENTIALS ---========================================================
@@ -380,6 +403,10 @@ bool elgsig_check(int_t *cif, size_t cif_size,
                   int_t key_y, int_t key_g, int_t p,
                   int_t *data, size_t data_size)
 {
+    if (cif_size != data_size << 1)
+    {
+        return false;
+    }
     for (size_t i = 0; i < cif_size; i += 2)
     {
         if (!elgsig_check(key_y, key_g, cif[i], cif[i + 1], p, data[i >> 1]))
@@ -698,6 +725,28 @@ void dump_data_to_dec_file(int_t *data, size_t data_size,
     fclose(file);
 }
 
+/*
+!! Allocates memory for the result
+*/
+void dump_data_to_dec_str(int_t *data, size_t data_size,
+                          int_t N, char **str)
+{
+    size_t num_len = dec_num_len(N);
+    char *res = ALLOC(char, data_size *num_len);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        for (size_t j = 0; j < num_len - dec_num_len(data[i]); j++)
+        {
+            *res = '0';
+            res++;
+        }
+        sprintf(res, "%d", data[i]);
+        res += dec_num_len(data[i]);
+    }
+    res -= data_size * num_len;
+    *str = res;
+}
+
 void dump_data_to_hex_file(int_t *data, size_t data_size, int_t N,
                            const char *file_name)
 {
@@ -708,6 +757,22 @@ void dump_data_to_hex_file(int_t *data, size_t data_size, int_t N,
         fprintf(file, "%0*X", num_len, data[i]);
     }
     fclose(file);
+}
+
+/*
+!! Allocates memory for the result
+*/
+void dump_data_to_hex_str(int_t *data, size_t data_size, int_t N, char **str)
+{
+    size_t num_len = hex_num_len(N);
+    char *res = ALLOC(char, data_size *num_len);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        sprintf(res, "%0*X", num_len, data[i]);
+        res += num_len;
+    }
+    res -= data_size * num_len;
+    *str = res;
 }
 
 void dump_data_to_bin_file(int_t *data, size_t data_size, const char *file_name)
@@ -963,13 +1028,618 @@ void test_elgsig_array()
 
 #endif // TESTS_ENABLED
 
+/*
+!! Allocates memory for the result
+*/
+void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
+{
+    for (size_t i = 0; i < strlen(str); i++)
+    {
+        if (str[i] == ',' ||
+            str[i] == ';' ||
+            str[i] == '\n' ||
+            str[i] == '\t' ||
+            str[i] == '\r')
+        {
+            str[i] = ' ';
+        }
+    }
+    std::vector<int_t> lst;
+    char *token = strtok(str, " ");
+    while (token != NULL)
+    {
+        lst.push_back(atoi(token));
+        token = strtok(NULL, " ");
+    }
+    *data_size = lst.size();
+    SCRAP_VECTOR(*data, lst, int_t);
+}
+
+void parse_cif_to_ints(char *str, int_t **data, size_t *data_size, int_t N)
+{
+    // chop str to N-sized parts, then atoi them
+    size_t num_len = dec_num_len(N);
+    size_t num_count = strlen(str) / num_len;
+    int_t *res = ALLOC(int_t, num_count);
+    for (size_t i = 0; i < num_count; i++)
+    {
+        int_t num = 0;
+        for (size_t j = 0; j < num_len; j++)
+        {
+            num = num * 10 + str[i * num_len + j] - '0';
+        }
+        res[i] = num;
+    }
+    *data = res;
+    *data_size = num_count;
+}
+
+// ===--- INTERFACE ---=========================================================
+#define __INTERFACE
+
+bool is_array_ascii(int_t *data, size_t data_size)
+{
+    for (size_t i = 0; i < data_size; i++)
+    {
+        if (data[i] > 255)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void array_to_ascii(int_t *data, size_t data_size, char **str)
+{
+    char *res = CALLOC(char, data_size);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        res[i] = (char)data[i];
+    }
+    *str = res;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void acsii_to_array(char *str, int_t **data, size_t *data_size)
+{
+    size_t str_len = strlen(str);
+    int_t *res = ALLOC(int_t, str_len);
+    for (size_t i = 0; i < str_len; i++)
+    {
+        res[i] = (int_t)str[i];
+    }
+    *data = res;
+    *data_size = str_len;
+}
+
+bool is_str_contains_alpha(char *str)
+{
+    for (size_t i = 0; i < strlen(str); i++)
+    {
+        if (isalpha(str[i]))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_array_contains_alpha(int_t *data, size_t data_size)
+{
+    for (size_t i = 0; i < data_size; i++)
+    {
+        if (isalpha(data[i]))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void main_case_rsa_genkey()
+{
+    printf(RSA_STR);
+    int_t cif_key;
+    int_t dcif_key;
+    int_t *cif;
+    size_t cif_size;
+    int_t *data;
+    size_t data_size;
+    char *str_buf;
+    printf("First prime number (p): ");
+    int_t p;
+    std::cin >> p;
+    printf("Second prime number (q): ");
+    int_t q;
+    std::cin >> q;
+    int_t N = rsa_N(p, q);
+    int_t t = rsa_t(p, q);
+    cif_key = rsa_cif_key(t);
+    dcif_key = rsa_dcif_key(cif_key, t);
+    std::cout << "N: " << N << std::endl;
+    std::cout << "t: " << t << std::endl;
+    std::cout << "Public key: " << cif_key << std::endl;
+    std::cout << "Private key: " << dcif_key << std::endl;
+    std::string input_str;
+    std::cout << "Enter sequence to encode: " << std::endl;
+    std::getline(std::cin >> std::ws, input_str);
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    rsa_cif(data, data_size, &cif, &cif_size, cif_key, N);
+    dump_data_to_dec_str(cif, cif_size, N, &str_buf);
+    std::cout << C_CYAN "Encoded sequence:" C_RESET " \n"
+              << str_buf << std::endl;
+    free(data);
+    free(cif);
+}
+
+void main_case_rsa_setkey()
+{
+    printf(RSA_STR);
+    printf("Public key: ");
+    int_t cif_key;
+    std::cin >> cif_key;
+    printf("N: ");
+    int_t N;
+    std::cin >> N;
+    std::string input_str;
+    std::cout << "Enter sequence to encode:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    int_t *cif;
+    size_t cif_size;
+    rsa_cif(data, data_size, &cif, &cif_size, cif_key, N);
+    char *str_buf;
+    dump_data_to_dec_str(cif, cif_size, N, &str_buf);
+    std::cout << C_CYAN "Encoded sequence:" C_RESET " \n"
+              << str_buf << std::endl;
+    free(data);
+    free(cif);
+}
+
+void main_case_rsa_decode()
+{
+    printf(RSA_STR);
+    printf("Private key: ");
+    int_t prvt_key;
+    std::cin >> prvt_key;
+    printf("N: ");
+    int_t N;
+    std::cin >> N;
+    std::string input_str;
+    std::cout << "Enter sequence to decode:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    parse_cif_to_ints((char *)input_str.c_str(), &data, &data_size, N);
+    int_t *dcif;
+    size_t dcif_size;
+    rsa_dcif(data, data_size, &dcif, &dcif_size, prvt_key, N);
+    std::cout << C_CYAN "Decoded sequence:" C_RESET " \n";
+    print_array(dcif, dcif_size);
+    if (is_array_ascii(dcif, dcif_size))
+    {
+        char *str_buf;
+        array_to_ascii(dcif, dcif_size, &str_buf);
+        std::cout << C_CYAN "Decoded sequence (ASCII):" C_RESET " \n"
+                  << str_buf << std::endl;
+        free(str_buf);
+    }
+    free(data);
+    free(dcif);
+}
+
+void main_case_elg_genkey()
+{
+    printf(ELGAMAL_STR);
+    int_t key_x, key_y, key_g;
+    int_t p;
+    printf("N: ");
+    std::cin >> p;
+    elg_make_private_key(&key_x, p);
+    elg_make_public_key(&key_y, &key_g, key_x, p);
+    std::cout << "Private key (x): " << key_x << std::endl;
+    std::cout << "Public key (y): " << key_y << std::endl;
+    std::cout << "Generator (g): " << key_g << std::endl;
+    std::string input_str;
+    std::cout << "Enter sequence to encode:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    int_t *cif;
+    size_t cif_size;
+    elg_cif(data, data_size, &cif, &cif_size, key_y, key_g, p);
+    char *str_buf;
+    dump_data_to_dec_str(cif, cif_size, p, &str_buf);
+    std::cout << C_CYAN "Encoded sequence:" C_RESET " \n"
+              << str_buf << std::endl;
+    free(data);
+    free(cif);
+}
+
+void main_case_elg_setkey()
+{
+    printf(ELGAMAL_STR);
+    printf("Public key (y): ");
+    int_t key_y;
+    std::cin >> key_y;
+    printf("Generator (g): ");
+    int_t key_g;
+    std::cin >> key_g;
+    printf("N: ");
+    int_t p;
+    std::cin >> p;
+    std::string input_str;
+    std::cout << "Enter sequence to encode:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    int_t *cif;
+    size_t cif_size;
+    elg_cif(data, data_size, &cif, &cif_size, key_y, key_g, p);
+    char *str_buf;
+    dump_data_to_dec_str(cif, cif_size, p, &str_buf);
+    std::cout << C_CYAN "Encoded sequence:" C_RESET " \n"
+              << str_buf << std::endl;
+    free(data);
+    free(cif);
+}
+
+void main_case_elg_decode()
+{
+    printf(ELGAMAL_STR);
+    printf("Private key (x): ");
+    int_t prvt_key;
+    std::cin >> prvt_key;
+    printf("N: ");
+    int_t p;
+    std::cin >> p;
+    std::string input_str;
+    std::cout << "Enter sequence to decode:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    parse_cif_to_ints((char *)input_str.c_str(), &data, &data_size, p);
+    int_t *dcif;
+    size_t dcif_size;
+    elg_dcif(data, data_size, &dcif, &dcif_size, prvt_key, p);
+    std::cout << C_CYAN "Decoded sequence:" C_RESET " \n";
+    print_array(dcif, dcif_size);
+    if (is_array_ascii(dcif, dcif_size))
+    {
+        char *str_buf;
+        array_to_ascii(dcif, dcif_size, &str_buf);
+        std::cout << C_CYAN "Decoded sequence (ASCII):" C_RESET " \n"
+                  << str_buf << std::endl;
+        free(str_buf);
+    }
+    free(data);
+    free(dcif);
+}
+
+void main_case_elgsig_genkey()
+{
+    printf(ELGSIG_STR);
+    int_t key_x, key_y, key_g;
+    int_t p;
+    printf("N: ");
+    std::cin >> p;
+    elg_make_private_key(&key_x, p);
+    elg_make_public_key(&key_y, &key_g, key_x, p);
+    std::cout << "Private key (x): " << key_x << std::endl;
+    std::cout << "Public key (y): " << key_y << std::endl;
+    std::cout << "Generator (g): " << key_g << std::endl;
+    std::string input_str;
+    std::cout << "Enter sequence to sign:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    int_t *cif;
+    size_t cif_size;
+    elgsig_make(data, data_size, &cif, &cif_size, key_x, key_g, p);
+    char *str_buf;
+    dump_data_to_dec_str(cif, cif_size, p, &str_buf);
+    std::cout << C_CYAN "Signature:" C_RESET "\n"
+              << str_buf << std::endl;
+    free(data);
+    free(cif);
+}
+
+void main_case_elgsig_setkey()
+{
+    printf(ELGSIG_STR);
+    printf("Private key (x): ");
+    int_t key_x;
+    std::cin >> key_x;
+    printf("Generator (g): ");
+    int_t key_g;
+    std::cin >> key_g;
+    printf("N: ");
+    int_t p;
+    std::cin >> p;
+    std::string input_str;
+    std::cout << "Enter sequence to sign:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    int_t *cif;
+    size_t cif_size;
+    elgsig_make(data, data_size, &cif, &cif_size, key_x, key_g, p);
+    char *str_buf;
+    dump_data_to_dec_str(cif, cif_size, p, &str_buf);
+    std::cout << C_CYAN "Signature:" C_RESET "\n"
+              << str_buf << std::endl;
+    free(data);
+    free(cif);
+}
+
+void main_case_elgsig_check()
+{
+    printf(ELGSIG_STR);
+    printf("Public key (y): ");
+    int_t key_y;
+    std::cin >> key_y;
+    printf("Generator (g): ");
+    int_t key_g;
+    std::cin >> key_g;
+    printf("N: ");
+    int_t p;
+    std::cin >> p;
+    std::string input_str;
+    std::cout << "Enter sequence to check:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *data;
+    size_t data_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+    }
+    std::cout << "Enter signature:\n";
+    std::getline(std::cin >> std::ws, input_str);
+    int_t *cif;
+    size_t cif_size;
+    parse_cif_to_ints((char *)input_str.c_str(), &cif, &cif_size, p);
+    bool res = elgsig_check(cif, cif_size, key_y, key_g, p, data, data_size);
+    std::cout << (res ? C_GREEN "Signature is valid" C_RESET " "
+                      : C_RED "Signature is invalid" C_RESET " ")
+              << std::endl;
+    free(data);
+    free(cif);
+}
+
 int main()
 {
-    test_rsa_array();
-    test_elg_array();
-    test_elgsig_array();
-    rsa_bench();
-    elg_bench();
-    elgsig_bench();
+    ime_enter_alt_screen();
+    ime_clear_screen();
+
+    printf(IME_ESC IME_RGB_COLOR(0, 255, 255) IME_ESC_END
+           "CIFS.CPP" C_RESET " \n");
+    printf("===--- CIFS \n");
+    printf("  1) RSA\n");
+    printf("  2) ELGAMAL\n");
+    printf("  3) ELGAMAL SIGNATURE\n");
+    printf("===--- BENCHMARKS \n");
+    printf("  4) RSA\n");
+    printf("  5) ELGAMAL\n");
+    printf("  6) ELGAMAL SIGNATURE\n");
+    printf("  7) Run all tests\n");
+
+    printf(INPUT_STR);
+    int input;
+    std::cin >> input;
+    ime_clear_screen();
+
+    switch (input)
+    {
+    case 1:
+    {
+        printf(RSA_STR);
+        printf("===--- MODES ---===\n");
+        printf("  1) Generate keys & Encode\n");
+        printf("  2) Enter key & Encode\n");
+        printf("  3) Decode\n");
+
+        printf(INPUT_STR);
+        std::cin >> input;
+        ime_clear_screen();
+
+        switch (input)
+        {
+        case 1:
+        {
+            main_case_rsa_genkey();
+            break;
+        }
+        case 2:
+        {
+            main_case_rsa_setkey();
+            break;
+        }
+        case 3:
+        {
+            main_case_rsa_decode();
+            break;
+        }
+        default:
+        {
+            printf(INVALID_INPUT_STR);
+            return 1;
+        }
+        }
+        break;
+    }
+    case 2:
+    {
+        printf(ELGAMAL_STR);
+        printf("===--- MODES ---===\n");
+        printf("  1) Generate keys & Encode\n");
+        printf("  2) Enter key & Encode\n");
+        printf("  3) Decode\n");
+
+        printf(INPUT_STR);
+        std::cin >> input;
+        ime_clear_screen();
+
+        switch (input)
+        {
+        case 1:
+        {
+            main_case_elg_genkey();
+            break;
+        }
+        case 2:
+        {
+            main_case_elg_setkey();
+            break;
+        }
+        case 3:
+        {
+            main_case_elg_decode();
+            break;
+        }
+        default:
+        {
+            printf(INVALID_INPUT_STR);
+            return 1;
+        }
+        }
+        break;
+    }
+    case 3:
+    {
+        printf(ELGSIG_STR);
+        printf("===--- MODES ---===\n");
+        printf("  1) Generate keys & Sign\n");
+        printf("  2) Enter key & Sign\n");
+        printf("  3) Check sign\n");
+
+        printf(INPUT_STR);
+        std::cin >> input;
+        ime_clear_screen();
+
+        switch (input)
+        {
+        case 1:
+        {
+            main_case_elgsig_genkey();
+            break;
+        }
+        case 2:
+        {
+            main_case_elgsig_setkey();
+            break;
+        }
+        case 3:
+        {
+            main_case_elgsig_check();
+            break;
+        }
+        default:
+        {
+            printf(INVALID_INPUT_STR);
+            return 1;
+        }
+        }
+        break;
+    }
+    case 4:
+    {
+        ime_exit_alt_screen();
+        rsa_bench();
+        getchar();
+        break;
+    }
+    case 5:
+    {
+        ime_exit_alt_screen();
+        elg_bench();
+        getchar();
+        break;
+    }
+    case 6:
+    {
+        ime_exit_alt_screen();
+        elgsig_bench();
+        getchar();
+        break;
+    }
+    case 7:
+    {
+        ime_exit_alt_screen();
+        printf(TESTS_STR);
+        test_rsa_array();
+        test_elg_array();
+        test_elgsig_array();
+        rsa_bench();
+        elg_bench();
+        elgsig_bench();
+        getchar();
+        break;
+    }
+    default:
+    {
+        printf(INVALID_INPUT_STR);
+        return 1;
+    }
+    }
+
+    getchar();
+    ime_exit_alt_screen();
     return 0;
 }
