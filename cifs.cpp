@@ -890,6 +890,116 @@ bool cmp_arrays(int_t *arr1, size_t arr1_size, int_t *arr2, size_t arr2_size)
     return true;
 }
 
+/*
+!! Allocates memory for the result
+*/
+void array_to_ascii(int_t *data, size_t data_size, char **str)
+{
+    char *res = CALLOC(char, data_size);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        res[i] = (char)data[i];
+    }
+    *str = res;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void acsii_to_array(char *str, int_t **data, size_t *data_size)
+{
+    size_t str_len = strlen(str);
+    int_t *res = ALLOC(int_t, str_len);
+    for (size_t i = 0; i < str_len; i++)
+    {
+        res[i] = (int_t)str[i];
+    }
+    *data = res;
+    *data_size = str_len;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
+{
+    for (size_t i = 0; i < strlen(str); i++)
+    {
+        if (str[i] == ',' ||
+            str[i] == ';' ||
+            str[i] == '\n' ||
+            str[i] == '\t' ||
+            str[i] == '\r')
+        {
+            str[i] = ' ';
+        }
+    }
+    std::vector<int_t> lst;
+    char *token = strtok(str, " ");
+    while (token != NULL)
+    {
+        lst.push_back(atoi(token));
+        token = strtok(NULL, " ");
+    }
+    *data_size = lst.size();
+    SCRAP_VECTOR(*data, lst, int_t);
+}
+
+void parse_cif_to_ints(char *str, int_t **data, size_t *data_size, int_t N)
+{
+    // chop str to N-sized parts, then atoi them
+    size_t num_len = dec_num_len(N);
+    size_t num_count = strlen(str) / num_len;
+    int_t *res = ALLOC(int_t, num_count);
+    for (size_t i = 0; i < num_count; i++)
+    {
+        int_t num = 0;
+        for (size_t j = 0; j < num_len; j++)
+        {
+            num = num * 10 + str[i * num_len + j] - '0';
+        }
+        res[i] = num;
+    }
+    *data = res;
+    *data_size = num_count;
+}
+
+bool is_array_ascii(int_t *data, size_t data_size)
+{
+    for (size_t i = 0; i < data_size; i++)
+    {
+        if (data[i] > 255)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool is_str_contains_alpha(char *str)
+{
+    for (size_t i = 0; i < strlen(str); i++)
+    {
+        if (isalpha(str[i]))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_array_contains_alpha(int_t *data, size_t data_size)
+{
+    for (size_t i = 0; i < data_size; i++)
+    {
+        if (isalpha(data[i]))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 // ===--- TESTS ---=============================================================
 #define __TESTS
 
@@ -1028,118 +1138,8 @@ void test_elgsig_array()
 
 #endif // TESTS_ENABLED
 
-/*
-!! Allocates memory for the result
-*/
-void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
-{
-    for (size_t i = 0; i < strlen(str); i++)
-    {
-        if (str[i] == ',' ||
-            str[i] == ';' ||
-            str[i] == '\n' ||
-            str[i] == '\t' ||
-            str[i] == '\r')
-        {
-            str[i] = ' ';
-        }
-    }
-    std::vector<int_t> lst;
-    char *token = strtok(str, " ");
-    while (token != NULL)
-    {
-        lst.push_back(atoi(token));
-        token = strtok(NULL, " ");
-    }
-    *data_size = lst.size();
-    SCRAP_VECTOR(*data, lst, int_t);
-}
-
-void parse_cif_to_ints(char *str, int_t **data, size_t *data_size, int_t N)
-{
-    // chop str to N-sized parts, then atoi them
-    size_t num_len = dec_num_len(N);
-    size_t num_count = strlen(str) / num_len;
-    int_t *res = ALLOC(int_t, num_count);
-    for (size_t i = 0; i < num_count; i++)
-    {
-        int_t num = 0;
-        for (size_t j = 0; j < num_len; j++)
-        {
-            num = num * 10 + str[i * num_len + j] - '0';
-        }
-        res[i] = num;
-    }
-    *data = res;
-    *data_size = num_count;
-}
-
 // ===--- INTERFACE ---=========================================================
 #define __INTERFACE
-
-bool is_array_ascii(int_t *data, size_t data_size)
-{
-    for (size_t i = 0; i < data_size; i++)
-    {
-        if (data[i] > 255)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-/*
-!! Allocates memory for the result
-*/
-void array_to_ascii(int_t *data, size_t data_size, char **str)
-{
-    char *res = CALLOC(char, data_size);
-    for (size_t i = 0; i < data_size; i++)
-    {
-        res[i] = (char)data[i];
-    }
-    *str = res;
-}
-
-/*
-!! Allocates memory for the result
-*/
-void acsii_to_array(char *str, int_t **data, size_t *data_size)
-{
-    size_t str_len = strlen(str);
-    int_t *res = ALLOC(int_t, str_len);
-    for (size_t i = 0; i < str_len; i++)
-    {
-        res[i] = (int_t)str[i];
-    }
-    *data = res;
-    *data_size = str_len;
-}
-
-bool is_str_contains_alpha(char *str)
-{
-    for (size_t i = 0; i < strlen(str); i++)
-    {
-        if (isalpha(str[i]))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool is_array_contains_alpha(int_t *data, size_t data_size)
-{
-    for (size_t i = 0; i < data_size; i++)
-    {
-        if (isalpha(data[i]))
-        {
-            return true;
-        }
-    }
-    return false;
-}
 
 void main_case_rsa_genkey()
 {
