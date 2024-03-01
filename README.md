@@ -19,3 +19,16 @@ After building the project, you can run the program using the following command:
 ```bash
 ./build/cifs
 ```
+
+## Screenshots
+
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_enter.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_enter.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_cif_text.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_cif_key.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_cif_nums.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_rsa_dcif.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_enter.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_cif.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_valid.png?raw=true"/>
+<img src="https://github.com/Kseen715/imgs/blob/main/cifs.cpp/cifs.cpp_elgsig_invalid.png?raw=true"/>
