@@ -34,6 +34,9 @@ SOFTWARE.
 #define IMECLUI_IMPLEMENTATION
 #include "imeclui.h"
 
+#define ARGPARSE_IMPLEMENTATION
+#include "argparse.h"
+
 // ===--- CONFIG ---============================================================
 #define __CONFIG
 
@@ -54,6 +57,7 @@ SOFTWARE.
 // Preferrable allocators
 #define ALLOC(T, size) ((T *)malloc((size) * sizeof(T)))
 #define CALLOC(T, size) ((T *)calloc((size), sizeof(T)))
+#define REALLOC(T, ptr, size) ((T *)realloc(ptr, (size) * sizeof(T)))
 
 // Common integer type (signed)
 #define int_t int
@@ -69,6 +73,7 @@ SOFTWARE.
 #define C_GREEN IME_ESC IME_GREEN IME_ESC_END
 #define C_CYAN IME_ESC IME_RGB_COLOR(0, 200, 180) IME_ESC_END
 #define C_DIMM IME_ESC IME_BRIGHT_BLACK IME_ESC_END
+#define C_HEADER IME_ESC IME_RGB_COLOR(255, 117, 24) IME_ESC_END
 
 // Strings
 #define TESTS_STR IME_ESC IME_RGB_COLOR(255, 255, 100) IME_ESC_END \
@@ -132,6 +137,16 @@ int_t pow_int(int_t x, int_t pow)
 int_t pow_mod(int_t x, int_t pow, int_t mod)
 {
     int_t res = 1;
+    for (int_t i = 0; i < pow; i++)
+    {
+        res = (res * x) % mod;
+    }
+    return res;
+}
+
+uint8_t pow_mod(uint8_t x, int_t pow, int_t mod)
+{
+    uint8_t res = 1;
     for (int_t i = 0; i < pow; i++)
     {
         res = (res * x) % mod;
@@ -234,6 +249,11 @@ int_t rsa_cif(int_t x, int_t key, int_t N)
     return pow_mod(x, key, N);
 }
 
+int_t rsa_cif(uint8_t x, int_t key, int_t N)
+{
+    return pow_mod(x, key, N);
+}
+
 /*
 !! Allocates memory for the result
 */
@@ -245,6 +265,22 @@ void rsa_cif(int_t *data, size_t data_size,
     for (size_t i = 0; i < data_size; i++)
     {
         res[i] = rsa_cif(data[i], key, N);
+    }
+    *cif = res;
+    *cif_size = data_size;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void rsa_cif(uint8_t *data, size_t data_size,
+             int_t **cif, size_t *cif_size,
+             int_t key, int_t N)
+{
+    int_t *res = ALLOC(int_t, 2 * data_size);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        res[i] = rsa_cif((int_t)data[i], key, N);
     }
     *cif = res;
     *cif_size = data_size;
@@ -263,6 +299,22 @@ void rsa_dcif(int_t *cif, size_t cif_size,
               int_t key, int_t N)
 {
     int_t *res = ALLOC(int_t, cif_size);
+    for (size_t i = 0; i < cif_size; i++)
+    {
+        res[i] = rsa_dcif(cif[i], key, N);
+    }
+    *data = res;
+    *data_size = cif_size;
+}
+
+/*
+!! Allocates memory for the result
+*/
+void rsa_dcif(int_t *cif, size_t cif_size,
+              uint8_t **data, size_t *data_size,
+              int_t key, int_t N)
+{
+    uint8_t *res = ALLOC(uint8_t, cif_size);
     for (size_t i = 0; i < cif_size; i++)
     {
         res[i] = rsa_dcif(cif[i], key, N);
@@ -864,14 +916,26 @@ void read_dump_from_bin_file(int_t **data, size_t *data_size, const char *file_n
     *data_size = file_size / sizeof(int_t);
 }
 
-void print_array(int_t *data, size_t data_size)
+template <typename T>
+void print_array(T *data, size_t data_size)
 {
-    std::cout << "[";
+    printf("[");
     for (size_t i = 0; i < data_size - 1; i++)
     {
-        std::cout << data[i] << ", ";
+        printf("%u, ", data[i]);
     }
-    std::cout << data[data_size - 1] << "]" << std::endl;
+    printf("%u]\n", data[data_size - 1]);
+}
+
+template <typename T>
+void print_array_hex(T *data, size_t data_size)
+{
+    printf("(%d)[", data_size);
+    for (size_t i = 0; i < data_size - 1; i++)
+    {
+        printf("0x%0*X, ", sizeof(T) * 2, data[i]);
+    }
+    printf("0x%0*X]\n", sizeof(T) * 2, data[data_size - 1]);
 }
 
 bool cmp_arrays(int_t *arr1, size_t arr1_size, int_t *arr2, size_t arr2_size)
@@ -1463,9 +1527,10 @@ void main_case_elgsig_check()
     free(cif);
 }
 
-int main()
+void main_interface()
 {
     ime_enter_alt_screen();
+    // ime_exit_alt_screen();
     ime_clear_screen();
 
     printf(IME_ESC IME_RGB_COLOR(0, 255, 255) IME_ESC_END
@@ -1519,7 +1584,7 @@ int main()
         default:
         {
             printf(INVALID_INPUT_STR);
-            return 1;
+            return;
         }
         }
         break;
@@ -1556,7 +1621,7 @@ int main()
         default:
         {
             printf(INVALID_INPUT_STR);
-            return 1;
+            return;
         }
         }
         break;
@@ -1593,7 +1658,7 @@ int main()
         default:
         {
             printf(INVALID_INPUT_STR);
-            return 1;
+            return;
         }
         }
         break;
@@ -1634,12 +1699,383 @@ int main()
     }
     default:
     {
+        ime_exit_alt_screen();
         printf(INVALID_INPUT_STR);
-        return 1;
+        return;
     }
     }
 
     getchar();
     ime_exit_alt_screen();
+}
+
+static const char *const usages[] = {
+    "cifs [options] [[--] args]",
+    "cifs [options]",
+    "cifs",
+    NULL,
+};
+
+bool str_eq(const char *str1, const char *str2)
+{
+    return strcmp(str1, str2) == 0;
+}
+
+void read_bin_file(uint8_t **bytes, size_t *size, const char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    assert(file != NULL && "Can't open file");
+    fseek(file, 0, SEEK_END);
+    *size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    *bytes = ALLOC(uint8_t, *size);
+    assert(*bytes != NULL && "Memory allocation failed");
+    fread(*bytes, 1, *size, file);
+    fclose(file);
+}
+
+void read_bin_file_ciph(uint8_t **bytes, size_t *size, uint8_t *padding, const char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    assert(file != NULL && "Can't open file");
+    fseek(file, 0, SEEK_END);
+    *size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    *bytes = ALLOC(uint8_t, *size);
+    assert(*bytes != NULL && "Memory allocation failed");
+    fread(padding, 1, 1, file);
+    *size -= 1;
+    fread(*bytes, 1, *size, file);
+    fclose(file);
+}
+
+void write_bin_file(const uint8_t *bytes, size_t size, const char *file_name)
+{
+    FILE *file = fopen(file_name, "wb");
+    assert(file != NULL && "Can't open file");
+    fwrite(bytes, 1, size, file);
+    fclose(file);
+}
+
+void write_bin_file_ciph(const uint8_t *bytes, size_t size, uint8_t padding, const char *file_name)
+{
+    FILE *file = fopen(file_name, "wb");
+    assert(file != NULL && "Can't open file");
+    fwrite(&padding, 1, 1, file);
+    fwrite(bytes, 1, size, file);
+    fclose(file);
+}
+
+int verbose = 1;
+
+int_t *padd_array_int_t_zeros(uint8_t *data, size_t *data_size, uint8_t *ret_padd_size)
+{
+    if (*data_size % sizeof(int_t) != 0)
+    {
+        *ret_padd_size = sizeof(int_t) - (*data_size % sizeof(int_t));
+        size_t new_size = *data_size + (sizeof(int_t) - (*data_size % sizeof(int_t)));
+        uint8_t *new_data = (uint8_t *)realloc(data, new_size);
+        assert(new_data != NULL && "Memory allocation failed");
+        for (size_t i = *data_size; i < new_size; i++)
+        {
+            new_data[i] = 0;
+        }
+        *data_size = new_size / sizeof(int_t);
+        return (int_t *)new_data;
+    }
+    else
+    {
+        *ret_padd_size = 0;
+        *data_size = *data_size / sizeof(int_t);
+        return (int_t *)data;
+    }
+}
+
+uint8_t *split_array_bytes(int_t *data, size_t *data_size)
+{
+    *data_size = *data_size * sizeof(int_t);
+    return (uint8_t *)data;
+}
+
+void split_array_to_bytes_N(int_t *data, size_t data_size,
+                            uint8_t **new_data, size_t *new_size,
+                            int_t N)
+{
+    size_t byte_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
+    printf("bytes: %d\n", byte_len);
+    *new_size = data_size * byte_len;
+    *new_data = ALLOC(uint8_t, *new_size);
+    for (size_t i = 0; i < data_size; i++)
+    {
+        for (size_t j = 0; j < byte_len; j++)
+        {
+            (*new_data)[i * byte_len + j] = (data[i] >>
+                                             (8 * (byte_len - 1 - j))) &
+                                            0xFF;
+        }
+    }
+}
+
+/*
+!! Allocates memory for the result
+*/
+template <typename T>
+void merge_array_bytes_N(uint8_t *data, size_t data_size,
+                         T **new_data, size_t *new_size,
+                         int_t N)
+{
+    size_t num_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
+    *new_size = data_size / num_len;
+    *new_data = ALLOC(T, *new_size);
+    for (size_t i = 0; i < *new_size; i++)
+    {
+        (*new_data)[i] = 0;
+        for (size_t j = 0; j < num_len; j++)
+        {
+            (*new_data)[i] = ((*new_data)[i] << 8) |
+                             (((uint8_t *)data)[i * num_len + j] & 0xFF);
+        }
+    }
+}
+
+void dev_func()
+{
+    uint8_t data[] = {1, 2, 3, 4, 128, 255};
+    size_t data_size = sizeof(data) / sizeof(data[0]);
+
+    int_t *cif;
+    size_t cif_size;
+    uint8_t *dec;
+    size_t dec_size;
+
+    printf("Data: ");
+    print_array_hex(data, data_size);
+
+    rsa_cif(data, data_size, &cif, &cif_size, 197, 1469);
+
+    printf("Encoded: ");
+    print_array_hex(cif, cif_size);
+
+    uint8_t *split;
+    size_t split_size;
+
+    split_array_to_bytes_N(cif, cif_size,
+                           &split, &split_size,
+                           1469);
+
+    printf("Cif bytes: ");
+    print_array_hex(split, split_size);
+
+    int_t *merged_bytes;
+    size_t merged_size;
+    merge_array_bytes_N<int_t>(split, split_size,
+                               &merged_bytes, &merged_size,
+                               1469);
+
+    printf("Merged: ");
+    print_array_hex(merged_bytes, merged_size);
+
+    rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 1469);
+
+    printf("Decoded: ");
+    print_array_hex(dec, dec_size);
+    free(cif);
+    free(dec);
+}
+
+int main(int argc, const char **argv)
+{
+    if (argc != 1)
+    {
+        int fix_screen = 0;
+        int dev = 0;
+        const char *ring = NULL;
+        const char *file = NULL;
+        const char *key = NULL;
+        const char *add_key = NULL;
+        const char *output = NULL;
+        const char *mode = NULL;
+        int encode = 0;
+        int decode = 0;
+        struct argparse_option options[] = {
+            OPT_HELP(),
+
+            OPT_GROUP(C_HEADER "Basic options" C_RESET " "),
+            OPT_BOOLEAN('V', "verbose", &verbose,
+                        "log all processes", NULL, 0, 0),
+            OPT_STRING('m', "mode", &mode,
+                       "mode to run ('rsa'- RSA, 'elg' - ElGamal, "
+                       "'elgsig' - ElGamal signature)",
+                       NULL, 0, 0),
+
+            OPT_GROUP(C_HEADER "RSA" C_RESET " "),
+            OPT_BOOLEAN('e', "encode", &encode, "encode data", NULL, 0, 0),
+            OPT_BOOLEAN('d', "decode", &decode, "decode data", NULL, 0, 0),
+            OPT_STRING('f', "file", &file, "path to input file", NULL, 0, 0),
+            OPT_STRING('o', "output", &output,
+                       "path to output file", NULL, 0, 0),
+            OPT_STRING('k', "key", &key, "encoding/decoding key", NULL, 0, 0),
+            OPT_STRING('n', "n", &ring, "N key", NULL, 0, 0),
+
+            OPT_GROUP(C_HEADER "ElGamal" C_RESET " "),
+            OPT_BOOLEAN('e', "encode", &encode, "encode data", NULL, 0, 0),
+            OPT_BOOLEAN('d', "decode", &decode, "decode data", NULL, 0, 0),
+            OPT_STRING('f', "file", &file, "path to input file", NULL, 0, 0),
+            OPT_STRING('o', "output", &output,
+                       "path to output file", NULL, 0, 0),
+            OPT_STRING('k', "key", &key,
+                       "encoding / decoding key", NULL, 0, 0),
+            OPT_STRING('g', "generator", &add_key,
+                       "generator key (encoding)", NULL, 0, 0),
+            OPT_STRING('n', "n", &ring, "N key", NULL, 0, 0),
+
+            OPT_GROUP(C_HEADER "ElGamal signature" C_RESET " "),
+            OPT_BOOLEAN('s', "sign", &encode, "sign data", NULL, 0, 0),
+            OPT_BOOLEAN('c', "check", &decode, "check sign", NULL, 0, 0),
+            OPT_STRING('f', "file", &file, "path to input file", NULL, 0, 0),
+            OPT_STRING('o', "signature", &output,
+                       "path to output file / signature", NULL, 0, 0),
+            OPT_STRING('k', "key", &key, "signing / checking key", NULL, 0, 0),
+            OPT_STRING('g', "generator", &add_key,
+                       "generator key (signing)", NULL, 0, 0),
+            OPT_STRING('n', "n", &ring, "N key", NULL, 0, 0),
+
+            OPT_GROUP(C_HEADER "Maintenance options" C_RESET " "),
+            OPT_BOOLEAN((char)NULL, "fix-screen", &fix_screen,
+                        "exit alt screen, use it when scroll bar disappears",
+                        NULL, 0, 0),
+            OPT_BOOLEAN((char)NULL, "dev", &dev,
+                        "dev mode",
+                        NULL, 0, 0),
+            OPT_END(),
+        };
+
+        struct argparse argparse;
+        argparse_init(&argparse, options, usages, 0);
+        argparse_describe(&argparse, "\nTMP opening msg", "\nTMP closing msg");
+        argc = argparse_parse(&argparse, argc, argv);
+        if (fix_screen != 0)
+        {
+            ime_exit_alt_screen();
+            return 0;
+        }
+        if (!verbose)
+            verbose = 0;
+        if (dev)
+        {
+            dev_func();
+            return 0;
+        }
+
+        printf("%s\n", mode);
+        if (str_eq("rsa", mode))
+        {
+            if (encode)
+            {
+                printf("RSA encode\n");
+                assert(file != NULL && "File path is required");
+                assert(ring != 0 && "N key is required");
+                assert(key != NULL && "Key is required");
+                if (output == NULL)
+                {
+                    output = (char *)malloc(strlen(file) + 6);
+                    strcpy((char *)output, file);
+                    strcat((char *)output, ".ciph");
+                }
+
+                printf("%d\n", rsa_cif(51, 197, 1469));
+                // return 0;
+
+                uint8_t *data;
+                size_t data_size;
+                read_bin_file(&data, &data_size, file);
+                printf("Data size: %u\n", data_size);
+                print_array(data, data_size);
+                int_t *cif;
+                size_t cif_size;
+                rsa_cif(data, data_size, &cif, &cif_size, atoi(key), atoi(ring));
+                printf("Encoded:");
+                uint8_t *bytes;
+                // split_array_to_bytes_N(cif, &cif_size, atoi(ring));
+                write_bin_file(bytes, cif_size, output);
+                print_array(bytes, cif_size);
+                printf("Written: %u\n", cif_size);
+                free(data);
+                free(cif);
+            }
+            else if (decode)
+            {
+                printf("RSA decode\n");
+                assert(file != NULL && "File path is required");
+                assert(ring != 0 && "N key is required");
+                assert(key != NULL && "Key is required");
+                // check if file ends with .ciph
+                if (file != NULL && strlen(file) > 5)
+                {
+                    if (strcmp(file + strlen(file) - 5, ".ciph") != 0)
+                    {
+                        printf(C_RED "File is not a .ciph file" C_RESET " \n");
+                        return 0;
+                    }
+                }
+                if (output == NULL)
+                {
+                    output = (char *)malloc(strlen(file) - 5);
+                    strncpy((char *)output, file, strlen(file) - 5);
+                }
+
+                uint8_t *data;
+                size_t data_size;
+                uint8_t padding;
+                read_bin_file_ciph(&data, &data_size, &padding, file);
+                printf("Data size: %u\n", data_size);
+                print_array(data, data_size);
+                int_t *data_int = (int_t *)data;
+                data_size = data_size / sizeof(int_t);
+                printf("Padded: %u\n", padding);
+                print_array(data_int, data_size);
+                rsa_dcif(data_int, data_size, &data_int, &data_size, atoi(key), atoi(ring));
+                printf("Decoded:");
+                print_array(data_int, data_size);
+                data = split_array_bytes(data_int, &data_size);
+                write_bin_file(data, data_size, output);
+                printf("Written: %u\n", data_size);
+                print_array(data, data_size);
+                free(data);
+                free(data_int);
+            }
+            else
+            {
+                printf(C_RED "Provide RSA mode '-e' or '-d'" C_RESET " \n");
+                return 0;
+            }
+        }
+        else if (str_eq("elg", mode))
+        {
+            printf("ElGamal\n");
+        }
+        else if (str_eq("elgsig", mode))
+        {
+            printf("ElGamal signature\n");
+        }
+        else
+        {
+            printf(C_RED "Invalid mode" C_RESET " \n");
+            return 0;
+        }
+
+        if (argc != 0)
+        {
+            printf("argc: %d\n", argc);
+            int i;
+            for (i = 0; i < argc; i++)
+            {
+                printf("argv[%d]: %s\n", i, *(argv + i));
+            }
+        }
+
+        return 0;
+    }
+    main_interface();
     return 0;
 }
