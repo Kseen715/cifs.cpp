@@ -516,7 +516,7 @@ void rsa_bench()
     auto rsa_dcif_t = GET_TIME_DIFF(time, GET_CURR_TIME);
 #endif // TESTS_VERBOSE
 
-    int num = 123;
+    int_t num = 123;
     time = GET_CURR_TIME;
     int_t encd;
     for (int_t i = 0; i < enc_epochs; i++)
@@ -1853,7 +1853,7 @@ void dev_func()
     printf("Data: ");
     print_array_hex(data, data_size);
 
-    rsa_cif(data, data_size, &cif, &cif_size, 197, 251);
+    rsa_cif(data, data_size, &cif, &cif_size, 197, 257);
 
     printf("Encoded: ");
     print_array_hex(cif, cif_size);
@@ -1863,7 +1863,7 @@ void dev_func()
 
     split_array_to_bytes_N(cif, cif_size,
                            &split, &split_size,
-                           251);
+                           257);
 
     printf("Cif bytes: ");
     print_array_hex(split, split_size);
@@ -1872,12 +1872,12 @@ void dev_func()
     size_t merged_size;
     merge_array_bytes_N<int_t>(split, split_size,
                                &merged_bytes, &merged_size,
-                               251);
+                               257);
 
     printf("Merged: ");
     print_array_hex(merged_bytes, merged_size);
 
-    rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 251);
+    rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 257);
 
     printf("Decoded: ");
     print_array_hex(dec, dec_size);
@@ -1985,8 +1985,7 @@ int main(int argc, const char **argv)
                     strcat((char *)output, ".ciph");
                 }
 
-                printf("%d\n", rsa_cif(51, 197, 1469));
-                // return 0;
+                std::cout << rsa_cif((int_t)51, 197, 1469) << std::endl;
 
                 byte_t *data;
                 size_t data_size;
