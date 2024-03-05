@@ -62,6 +62,9 @@ SOFTWARE.
 // Common integer type (signed)
 #define int_t int
 
+// Common byte type
+#define byte_t uint8_t
+
 // Copies vector's data to array
 #define SCRAP_VECTOR(dst, vec, T) \
     dst = ALLOC(T, (vec).size()); \
@@ -144,9 +147,9 @@ int_t pow_mod(int_t x, int_t pow, int_t mod)
     return res;
 }
 
-uint8_t pow_mod(uint8_t x, int_t pow, int_t mod)
+byte_t pow_mod(byte_t x, int_t pow, int_t mod)
 {
-    uint8_t res = 1;
+    byte_t res = 1;
     for (int_t i = 0; i < pow; i++)
     {
         res = (res * x) % mod;
@@ -249,7 +252,7 @@ int_t rsa_cif(int_t x, int_t key, int_t N)
     return pow_mod(x, key, N);
 }
 
-int_t rsa_cif(uint8_t x, int_t key, int_t N)
+int_t rsa_cif(byte_t x, int_t key, int_t N)
 {
     return pow_mod(x, key, N);
 }
@@ -273,7 +276,7 @@ void rsa_cif(int_t *data, size_t data_size,
 /*
 !! Allocates memory for the result
 */
-void rsa_cif(uint8_t *data, size_t data_size,
+void rsa_cif(byte_t *data, size_t data_size,
              int_t **cif, size_t *cif_size,
              int_t key, int_t N)
 {
@@ -311,10 +314,10 @@ void rsa_dcif(int_t *cif, size_t cif_size,
 !! Allocates memory for the result
 */
 void rsa_dcif(int_t *cif, size_t cif_size,
-              uint8_t **data, size_t *data_size,
+              byte_t **data, size_t *data_size,
               int_t key, int_t N)
 {
-    uint8_t *res = ALLOC(uint8_t, cif_size);
+    byte_t *res = ALLOC(byte_t, cif_size);
     for (size_t i = 0; i < cif_size; i++)
     {
         res[i] = rsa_dcif(cif[i], key, N);
@@ -1721,27 +1724,27 @@ bool str_eq(const char *str1, const char *str2)
     return strcmp(str1, str2) == 0;
 }
 
-void read_bin_file(uint8_t **bytes, size_t *size, const char *file_name)
+void read_bin_file(byte_t **bytes, size_t *size, const char *file_name)
 {
     FILE *file = fopen(file_name, "rb");
     assert(file != NULL && "Can't open file");
     fseek(file, 0, SEEK_END);
     *size = ftell(file);
     fseek(file, 0, SEEK_SET);
-    *bytes = ALLOC(uint8_t, *size);
+    *bytes = ALLOC(byte_t, *size);
     assert(*bytes != NULL && "Memory allocation failed");
     fread(*bytes, 1, *size, file);
     fclose(file);
 }
 
-void read_bin_file_ciph(uint8_t **bytes, size_t *size, uint8_t *padding, const char *file_name)
+void read_bin_file_ciph(byte_t **bytes, size_t *size, byte_t *padding, const char *file_name)
 {
     FILE *file = fopen(file_name, "rb");
     assert(file != NULL && "Can't open file");
     fseek(file, 0, SEEK_END);
     *size = ftell(file);
     fseek(file, 0, SEEK_SET);
-    *bytes = ALLOC(uint8_t, *size);
+    *bytes = ALLOC(byte_t, *size);
     assert(*bytes != NULL && "Memory allocation failed");
     fread(padding, 1, 1, file);
     *size -= 1;
@@ -1749,7 +1752,7 @@ void read_bin_file_ciph(uint8_t **bytes, size_t *size, uint8_t *padding, const c
     fclose(file);
 }
 
-void write_bin_file(const uint8_t *bytes, size_t size, const char *file_name)
+void write_bin_file(const byte_t *bytes, size_t size, const char *file_name)
 {
     FILE *file = fopen(file_name, "wb");
     assert(file != NULL && "Can't open file");
@@ -1757,7 +1760,7 @@ void write_bin_file(const uint8_t *bytes, size_t size, const char *file_name)
     fclose(file);
 }
 
-void write_bin_file_ciph(const uint8_t *bytes, size_t size, uint8_t padding, const char *file_name)
+void write_bin_file_ciph(const byte_t *bytes, size_t size, byte_t padding, const char *file_name)
 {
     FILE *file = fopen(file_name, "wb");
     assert(file != NULL && "Can't open file");
@@ -1768,13 +1771,13 @@ void write_bin_file_ciph(const uint8_t *bytes, size_t size, uint8_t padding, con
 
 int verbose = 1;
 
-int_t *padd_array_int_t_zeros(uint8_t *data, size_t *data_size, uint8_t *ret_padd_size)
+int_t *padd_array_int_t_zeros(byte_t *data, size_t *data_size, byte_t *ret_padd_size)
 {
     if (*data_size % sizeof(int_t) != 0)
     {
         *ret_padd_size = sizeof(int_t) - (*data_size % sizeof(int_t));
         size_t new_size = *data_size + (sizeof(int_t) - (*data_size % sizeof(int_t)));
-        uint8_t *new_data = (uint8_t *)realloc(data, new_size);
+        byte_t *new_data = (byte_t *)realloc(data, new_size);
         assert(new_data != NULL && "Memory allocation failed");
         for (size_t i = *data_size; i < new_size; i++)
         {
@@ -1791,20 +1794,19 @@ int_t *padd_array_int_t_zeros(uint8_t *data, size_t *data_size, uint8_t *ret_pad
     }
 }
 
-uint8_t *split_array_bytes(int_t *data, size_t *data_size)
+byte_t *split_array_bytes(int_t *data, size_t *data_size)
 {
     *data_size = *data_size * sizeof(int_t);
-    return (uint8_t *)data;
+    return (byte_t *)data;
 }
 
 void split_array_to_bytes_N(int_t *data, size_t data_size,
-                            uint8_t **new_data, size_t *new_size,
+                            byte_t **new_data, size_t *new_size,
                             int_t N)
 {
     size_t byte_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
-    printf("bytes: %d\n", byte_len);
     *new_size = data_size * byte_len;
-    *new_data = ALLOC(uint8_t, *new_size);
+    *new_data = ALLOC(byte_t, *new_size);
     for (size_t i = 0; i < data_size; i++)
     {
         for (size_t j = 0; j < byte_len; j++)
@@ -1820,7 +1822,7 @@ void split_array_to_bytes_N(int_t *data, size_t data_size,
 !! Allocates memory for the result
 */
 template <typename T>
-void merge_array_bytes_N(uint8_t *data, size_t data_size,
+void merge_array_bytes_N(byte_t *data, size_t data_size,
                          T **new_data, size_t *new_size,
                          int_t N)
 {
@@ -1833,35 +1835,35 @@ void merge_array_bytes_N(uint8_t *data, size_t data_size,
         for (size_t j = 0; j < num_len; j++)
         {
             (*new_data)[i] = ((*new_data)[i] << 8) |
-                             (((uint8_t *)data)[i * num_len + j] & 0xFF);
+                             (((byte_t *)data)[i * num_len + j] & 0xFF);
         }
     }
 }
 
 void dev_func()
 {
-    uint8_t data[] = {1, 2, 3, 4, 128, 255};
+    byte_t data[] = {1, 2, 3, 4, 128, 255};
     size_t data_size = sizeof(data) / sizeof(data[0]);
 
     int_t *cif;
     size_t cif_size;
-    uint8_t *dec;
+    byte_t *dec;
     size_t dec_size;
 
     printf("Data: ");
     print_array_hex(data, data_size);
 
-    rsa_cif(data, data_size, &cif, &cif_size, 197, 1469);
+    rsa_cif(data, data_size, &cif, &cif_size, 197, 251);
 
     printf("Encoded: ");
     print_array_hex(cif, cif_size);
 
-    uint8_t *split;
+    byte_t *split;
     size_t split_size;
 
     split_array_to_bytes_N(cif, cif_size,
                            &split, &split_size,
-                           1469);
+                           251);
 
     printf("Cif bytes: ");
     print_array_hex(split, split_size);
@@ -1870,12 +1872,12 @@ void dev_func()
     size_t merged_size;
     merge_array_bytes_N<int_t>(split, split_size,
                                &merged_bytes, &merged_size,
-                               1469);
+                               251);
 
     printf("Merged: ");
     print_array_hex(merged_bytes, merged_size);
 
-    rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 1469);
+    rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 251);
 
     printf("Decoded: ");
     print_array_hex(dec, dec_size);
@@ -1986,7 +1988,7 @@ int main(int argc, const char **argv)
                 printf("%d\n", rsa_cif(51, 197, 1469));
                 // return 0;
 
-                uint8_t *data;
+                byte_t *data;
                 size_t data_size;
                 read_bin_file(&data, &data_size, file);
                 printf("Data size: %u\n", data_size);
@@ -1995,7 +1997,7 @@ int main(int argc, const char **argv)
                 size_t cif_size;
                 rsa_cif(data, data_size, &cif, &cif_size, atoi(key), atoi(ring));
                 printf("Encoded:");
-                uint8_t *bytes;
+                byte_t *bytes;
                 // split_array_to_bytes_N(cif, &cif_size, atoi(ring));
                 write_bin_file(bytes, cif_size, output);
                 print_array(bytes, cif_size);
@@ -2024,9 +2026,9 @@ int main(int argc, const char **argv)
                     strncpy((char *)output, file, strlen(file) - 5);
                 }
 
-                uint8_t *data;
+                byte_t *data;
                 size_t data_size;
-                uint8_t padding;
+                byte_t padding;
                 read_bin_file_ciph(&data, &data_size, &padding, file);
                 printf("Data size: %u\n", data_size);
                 print_array(data, data_size);
