@@ -32,10 +32,12 @@ SOFTWARE.
 
 #define ADD_EXPORTS
 #define IMECLUI_IMPLEMENTATION
-#include "imeclui.h"
+#include "src/imeclui.h"
 
 #define ARGPARSE_IMPLEMENTATION
-#include "argparse.h"
+#include "src/argparse.h"
+
+#include "src/tqdm.hpp"
 
 // ===--- CONFIG ---============================================================
 #define __CONFIG
@@ -48,6 +50,10 @@ SOFTWARE.
 
 // ===--- MACROS ---============================================================
 #define __MACROS
+
+int log_verbose = 1;
+int log_quiet = 0;
+int log_shutup = 0;
 
 // Time measurement
 #define GET_CURR_TIME std::chrono::system_clock::now()
@@ -809,7 +815,7 @@ void dump_data_to_hex_file(int_t *data, size_t data_size, int_t N,
     FILE *file = fopen(file_name, "w");
     for (size_t i = 0; i < data_size; i++)
     {
-        fprintf(file, "%0*X", num_len, data[i]);
+        fprintf(file, "%0*X", (int)num_len, data[i]);
     }
     fclose(file);
 }
@@ -823,7 +829,7 @@ void dump_data_to_hex_str(int_t *data, size_t data_size, int_t N, char **str)
     char *res = ALLOC(char, data_size *num_len);
     for (size_t i = 0; i < data_size; i++)
     {
-        sprintf(res, "%0*X", num_len, data[i]);
+        sprintf(res, "%0*X", (int)num_len, data[i]);
         res += num_len;
     }
     res -= data_size * num_len;
@@ -933,12 +939,12 @@ void print_array(T *data, size_t data_size)
 template <typename T>
 void print_array_hex(T *data, size_t data_size)
 {
-    printf("(%d)[", data_size);
+    printf("(%lld)[", data_size);
     for (size_t i = 0; i < data_size - 1; i++)
     {
-        printf("0x%0*X, ", sizeof(T) * 2, data[i]);
+        printf("0x%0*X, ", (int)sizeof(T) * 2, data[i]);
     }
-    printf("0x%0*X]\n", sizeof(T) * 2, data[data_size - 1]);
+    printf("0x%0*X]\n", (int)sizeof(T) * 2, data[data_size - 1]);
 }
 
 bool cmp_arrays(int_t *arr1, size_t arr1_size, int_t *arr2, size_t arr2_size)
@@ -1737,67 +1743,12 @@ void read_bin_file(byte_t **bytes, size_t *size, const char *file_name)
     fclose(file);
 }
 
-void read_bin_file_ciph(byte_t **bytes, size_t *size, byte_t *padding, const char *file_name)
-{
-    FILE *file = fopen(file_name, "rb");
-    assert(file != NULL && "Can't open file");
-    fseek(file, 0, SEEK_END);
-    *size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    *bytes = ALLOC(byte_t, *size);
-    assert(*bytes != NULL && "Memory allocation failed");
-    fread(padding, 1, 1, file);
-    *size -= 1;
-    fread(*bytes, 1, *size, file);
-    fclose(file);
-}
-
 void write_bin_file(const byte_t *bytes, size_t size, const char *file_name)
 {
     FILE *file = fopen(file_name, "wb");
     assert(file != NULL && "Can't open file");
     fwrite(bytes, 1, size, file);
     fclose(file);
-}
-
-void write_bin_file_ciph(const byte_t *bytes, size_t size, byte_t padding, const char *file_name)
-{
-    FILE *file = fopen(file_name, "wb");
-    assert(file != NULL && "Can't open file");
-    fwrite(&padding, 1, 1, file);
-    fwrite(bytes, 1, size, file);
-    fclose(file);
-}
-
-int verbose = 1;
-
-int_t *padd_array_int_t_zeros(byte_t *data, size_t *data_size, byte_t *ret_padd_size)
-{
-    if (*data_size % sizeof(int_t) != 0)
-    {
-        *ret_padd_size = sizeof(int_t) - (*data_size % sizeof(int_t));
-        size_t new_size = *data_size + (sizeof(int_t) - (*data_size % sizeof(int_t)));
-        byte_t *new_data = (byte_t *)realloc(data, new_size);
-        assert(new_data != NULL && "Memory allocation failed");
-        for (size_t i = *data_size; i < new_size; i++)
-        {
-            new_data[i] = 0;
-        }
-        *data_size = new_size / sizeof(int_t);
-        return (int_t *)new_data;
-    }
-    else
-    {
-        *ret_padd_size = 0;
-        *data_size = *data_size / sizeof(int_t);
-        return (int_t *)data;
-    }
-}
-
-byte_t *split_array_bytes(int_t *data, size_t *data_size)
-{
-    *data_size = *data_size * sizeof(int_t);
-    return (byte_t *)data;
 }
 
 void split_array_to_bytes_N(int_t *data, size_t data_size,
@@ -1903,8 +1854,12 @@ int main(int argc, const char **argv)
             OPT_HELP(),
 
             OPT_GROUP(C_HEADER "Basic options" C_RESET " "),
-            OPT_BOOLEAN('V', "verbose", &verbose,
+            OPT_BOOLEAN('V', "verbose", &log_verbose,
                         "log all processes", NULL, 0, 0),
+            OPT_BOOLEAN('Q', "quiet", &log_quiet,
+                        "log only errors", NULL, 0, 0),
+            OPT_BOOLEAN((char)NULL, "shutup", &log_shutup,
+                        "log nothing", NULL, 0, 0),
             OPT_STRING('m', "mode", &mode,
                        "mode to run ('rsa'- RSA, 'elg' - ElGamal, "
                        "'elgsig' - ElGamal signature)",
@@ -1954,15 +1909,24 @@ int main(int argc, const char **argv)
 
         struct argparse argparse;
         argparse_init(&argparse, options, usages, 0);
-        argparse_describe(&argparse, "\nTMP opening msg", "\nTMP closing msg");
+        argparse_describe(&argparse, "\nTMP opening msg", "\nFor more info go to Git repo: https://github.com/Kseen715/cifs.cpp");
         argc = argparse_parse(&argparse, argc, argv);
         if (fix_screen != 0)
         {
             ime_exit_alt_screen();
             return 0;
         }
-        if (!verbose)
-            verbose = 0;
+        if (!log_verbose)
+            log_verbose = 0;
+        if (log_quiet)
+            log_quiet = 1;
+        if (log_shutup)
+        {
+            log_shutup = 1;
+            log_quiet = 1;
+            log_verbose = 0;
+        }
+
         if (dev)
         {
             dev_func();
@@ -1985,24 +1949,30 @@ int main(int argc, const char **argv)
                     strcat((char *)output, ".ciph");
                 }
 
-                std::cout << rsa_cif((int_t)51, 197, 1469) << std::endl;
-
                 byte_t *data;
                 size_t data_size;
                 read_bin_file(&data, &data_size, file);
-                printf("Data size: %u\n", data_size);
-                print_array(data, data_size);
+                printf("Data: ");
+                print_array_hex(data, data_size);
+
                 int_t *cif;
                 size_t cif_size;
                 rsa_cif(data, data_size, &cif, &cif_size, atoi(key), atoi(ring));
-                printf("Encoded:");
+                printf("Encoded: ");
+                print_array_hex(cif, cif_size);
+
                 byte_t *bytes;
-                // split_array_to_bytes_N(cif, &cif_size, atoi(ring));
-                write_bin_file(bytes, cif_size, output);
-                print_array(bytes, cif_size);
-                printf("Written: %u\n", cif_size);
+                size_t bytes_size;
+                split_array_to_bytes_N(cif, cif_size,
+                                       &bytes, &bytes_size,
+                                       atoi(ring));
+                write_bin_file(bytes, bytes_size, output);
+                printf("Written: ");
+                print_array_hex(bytes, bytes_size);
+
                 free(data);
                 free(cif);
+                free(bytes);
             }
             else if (decode)
             {
@@ -2027,23 +1997,28 @@ int main(int argc, const char **argv)
 
                 byte_t *data;
                 size_t data_size;
-                byte_t padding;
-                read_bin_file_ciph(&data, &data_size, &padding, file);
-                printf("Data size: %u\n", data_size);
-                print_array(data, data_size);
-                int_t *data_int = (int_t *)data;
-                data_size = data_size / sizeof(int_t);
-                printf("Padded: %u\n", padding);
-                print_array(data_int, data_size);
-                rsa_dcif(data_int, data_size, &data_int, &data_size, atoi(key), atoi(ring));
-                printf("Decoded:");
-                print_array(data_int, data_size);
-                data = split_array_bytes(data_int, &data_size);
-                write_bin_file(data, data_size, output);
-                printf("Written: %u\n", data_size);
-                print_array(data, data_size);
+                read_bin_file(&data, &data_size, file);
+                printf("Data: ");
+                print_array_hex(data, data_size);
+
+                int_t *data_int;
+                size_t data_int_size;
+                merge_array_bytes_N<int_t>(data, data_size, &data_int, &data_int_size, atoi(ring));
+                printf("Data int: ");
+                print_array(data_int, data_int_size);
+
+                byte_t *revert_bytes;
+                size_t revert_bytes_size;
+                rsa_dcif(data_int, data_int_size, &revert_bytes, &revert_bytes_size, atoi(key), atoi(ring));
+                printf("Decoded: ");
+                print_array_hex(revert_bytes, revert_bytes_size);
+
+                write_bin_file(revert_bytes, revert_bytes_size, output);
+                printf("Written: ");
+                print_array_hex(revert_bytes, revert_bytes_size);
                 free(data);
                 free(data_int);
+                free(revert_bytes);
             }
             else
             {
