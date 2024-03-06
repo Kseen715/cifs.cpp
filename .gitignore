@@ -3,3 +3,4 @@ build/
 *КБ*
 *.txt
 *.bin
+cifs.o
