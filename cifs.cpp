@@ -1791,49 +1791,136 @@ void merge_array_bytes_N(byte_t *data, size_t data_size,
     }
 }
 
+/*
+!! Allocates memory for the result
+*/
+void read_bin_file_chunk(byte_t **bytes, size_t *size,
+                         size_t start, size_t end,
+                         const char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    assert(file != NULL && "Can't open file");
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (end == 0)
+    {
+        end = file_size;
+    }
+    if (end > file_size)
+    {
+        end = file_size;
+    }
+    *size = end - start;
+    *bytes = ALLOC(byte_t, *size);
+    assert(*bytes != NULL && "Memory allocation failed");
+    fseek(file, start, SEEK_SET);
+    fread(*bytes, 1, *size, file);
+    fclose(file);
+}
+
+void write_bin_file_chunk(const byte_t *bytes, size_t size,
+                          size_t start, const char *file_name)
+{
+    FILE *file = fopen(file_name, "r+b");
+    if (file == NULL)
+    {
+        file = fopen(file_name, "wb");
+    }
+    assert(file != NULL && "Can't open file");
+    fseek(file, start, SEEK_SET);
+    fwrite(bytes, 1, size, file);
+    fclose(file);
+}
+
+size_t count_file_chunks(const char *file_name, size_t chunk_size)
+{
+    FILE *file = fopen(file_name, "rb");
+    assert(file != NULL && "Can't open file");
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fclose(file);
+    return (file_size + chunk_size - 1) / chunk_size;
+}
+
+template <typename T>
+T min(T a, T b)
+{
+    return a < b ? a : b;
+}
+
 void dev_func()
 {
-    byte_t data[] = {1, 2, 3, 4, 128, 255};
-    size_t data_size = sizeof(data) / sizeof(data[0]);
+    // auto iter = tq::tqdm(tq::range(0, 1000));
+    // iter.set_prefix("Progress: ");
+    // for (auto i : iter)
+    // {
+    //     usleep(10000);
+    // }
+    // std::cout << std::endl;
+    const char *input = "./build/vid.mp4";
+    const char *output = "./build/test.mp4";
 
-    int_t *cif;
-    size_t cif_size;
-    byte_t *dec;
-    size_t dec_size;
+    size_t chunk_size = 1024 * 1014;
+    size_t chunk_count = count_file_chunks(input, chunk_size);
+    std::cout << "Chunks: " << chunk_count << std::endl;
+    std::cout << "Size: " << chunk_size * chunk_count / 1024 << std::endl;
 
-    printf("Data: ");
-    print_array_hex(data, data_size);
+    byte_t *data;
+    size_t data_size;
+    auto iter = tq::tqdm(tq::range((size_t)0, chunk_count));
+    iter.set_prefix("Debug: ");
+    for (auto i : iter)
+    {
+        read_bin_file_chunk(&data, &data_size, i * chunk_size, (i + 1) * chunk_size, input);
+        write_bin_file_chunk(data, data_size, i * chunk_size, output);
+        free(data);
+    }
+    std::cout << std::endl;
 
-    rsa_cif(data, data_size, &cif, &cif_size, 197, 257);
+    // byte_t data[] = {1, 2, 3, 4, 128, 255};
+    // size_t data_size = sizeof(data) / sizeof(data[0]);
 
-    printf("Encoded: ");
-    print_array_hex(cif, cif_size);
+    // write_bin_file_chunk(data, data_size, 3465360, "./build/test.bin");
 
-    byte_t *split;
-    size_t split_size;
+    // int_t *cif;
+    // size_t cif_size;
+    // byte_t *dec;
+    // size_t dec_size;
 
-    split_array_to_bytes_N(cif, cif_size,
-                           &split, &split_size,
-                           257);
+    // printf("Data: ");
+    // print_array_hex(data, data_size);
 
-    printf("Cif bytes: ");
-    print_array_hex(split, split_size);
+    // rsa_cif(data, data_size, &cif, &cif_size, 197, 257);
 
-    int_t *merged_bytes;
-    size_t merged_size;
-    merge_array_bytes_N<int_t>(split, split_size,
-                               &merged_bytes, &merged_size,
-                               257);
+    // printf("Encoded: ");
+    // print_array_hex(cif, cif_size);
 
-    printf("Merged: ");
-    print_array_hex(merged_bytes, merged_size);
+    // byte_t *split;
+    // size_t split_size;
 
-    rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 257);
+    // split_array_to_bytes_N(cif, cif_size,
+    //                        &split, &split_size,
+    //                        257);
 
-    printf("Decoded: ");
-    print_array_hex(dec, dec_size);
-    free(cif);
-    free(dec);
+    // printf("Cif bytes: ");
+    // print_array_hex(split, split_size);
+
+    // int_t *merged_bytes;
+    // size_t merged_size;
+    // merge_array_bytes_N<int_t>(split, split_size,
+    //                            &merged_bytes, &merged_size,
+    //                            257);
+
+    // printf("Merged: ");
+    // print_array_hex(merged_bytes, merged_size);
+
+    // rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 257);
+
+    // printf("Decoded: ");
+    // print_array_hex(dec, dec_size);
+    // free(cif);
+    // free(dec);
 }
 
 int main(int argc, const char **argv)
@@ -1919,7 +2006,10 @@ int main(int argc, const char **argv)
         if (!log_verbose)
             log_verbose = 0;
         if (log_quiet)
+        {
             log_quiet = 1;
+            log_verbose = 0;
+        }
         if (log_shutup)
         {
             log_shutup = 1;
@@ -1952,14 +2042,20 @@ int main(int argc, const char **argv)
                 byte_t *data;
                 size_t data_size;
                 read_bin_file(&data, &data_size, file);
-                printf("Data: ");
-                print_array_hex(data, data_size);
+                if (!log_quiet)
+                {
+                    printf("Data: ");
+                    print_array_hex(data, data_size);
+                }
 
                 int_t *cif;
                 size_t cif_size;
                 rsa_cif(data, data_size, &cif, &cif_size, atoi(key), atoi(ring));
-                printf("Encoded: ");
-                print_array_hex(cif, cif_size);
+                if (!log_quiet)
+                {
+                    printf("Encoded: ");
+                    print_array_hex(cif, cif_size);
+                }
 
                 byte_t *bytes;
                 size_t bytes_size;
@@ -1967,8 +2063,11 @@ int main(int argc, const char **argv)
                                        &bytes, &bytes_size,
                                        atoi(ring));
                 write_bin_file(bytes, bytes_size, output);
-                printf("Written: ");
-                print_array_hex(bytes, bytes_size);
+                if (!log_quiet)
+                {
+                    printf("Written: ");
+                    print_array_hex(bytes, bytes_size);
+                }
 
                 free(data);
                 free(cif);
@@ -1993,32 +2092,46 @@ int main(int argc, const char **argv)
                 {
                     output = (char *)malloc(strlen(file) - 5);
                     strncpy((char *)output, file, strlen(file) - 5);
+                    ((char *)output)[strlen(file) - 5] = '\0';
                 }
 
                 byte_t *data;
                 size_t data_size;
                 read_bin_file(&data, &data_size, file);
-                printf("Data: ");
-                print_array_hex(data, data_size);
+                if (!log_quiet)
+                {
+                    printf("Data: ");
+                    print_array_hex(data, data_size);
+                }
 
                 int_t *data_int;
                 size_t data_int_size;
                 merge_array_bytes_N<int_t>(data, data_size, &data_int, &data_int_size, atoi(ring));
-                printf("Data int: ");
-                print_array(data_int, data_int_size);
+                if (!log_quiet)
+                {
+                    printf("Data int: ");
+                    print_array(data_int, data_int_size);
+                }
 
                 byte_t *revert_bytes;
                 size_t revert_bytes_size;
                 rsa_dcif(data_int, data_int_size, &revert_bytes, &revert_bytes_size, atoi(key), atoi(ring));
-                printf("Decoded: ");
-                print_array_hex(revert_bytes, revert_bytes_size);
+                if (!log_quiet)
+                {
+                    printf("Decoded: ");
+                    print_array_hex(revert_bytes, revert_bytes_size);
+                }
 
                 write_bin_file(revert_bytes, revert_bytes_size, output);
-                printf("Written: ");
-                print_array_hex(revert_bytes, revert_bytes_size);
+                if (!log_quiet)
+                {
+                    printf("Written: ");
+                    print_array_hex(revert_bytes, revert_bytes_size);
+                }
                 free(data);
                 free(data_int);
                 free(revert_bytes);
+                free((void *)output);
             }
             else
             {
