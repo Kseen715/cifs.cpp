@@ -162,7 +162,8 @@ namespace tq
         Chronometer refresh_{};
         double min_time_per_update_{0.15}; // found experimentally
 
-        std::ostream *os_{&std::cerr};
+        std::ostream *os_{&std::cout};
+        // std::ostream *os_{&std::cerr};
 
         index bar_size_{40};
         index term_cols_{1};

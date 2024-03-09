@@ -29,6 +29,7 @@ SOFTWARE.
 #include <iostream>
 #include <cassert>
 #include <cstring>
+#include <fstream>
 
 #define ADD_EXPORTS
 #define IMECLUI_IMPLEMENTATION
@@ -51,9 +52,10 @@ SOFTWARE.
 // ===--- MACROS ---============================================================
 #define __MACROS
 
-int log_verbose = 1;
-int log_quiet = 0;
-int log_shutup = 0;
+int log_verbose_lvl = 0; // Extended logs
+int log_common_lvl = 1;  // Common logs
+int log_quiet_lvl = 0;   // Errors only
+int log_shutup_lvl = 0;  // No logs
 
 // Time measurement
 #define GET_CURR_TIME std::chrono::system_clock::now()
@@ -113,6 +115,12 @@ int log_shutup = 0;
 #define FAILED_STR IME_ESC IME_RED IME_ESC_END \
     "FAILED\n" C_RESET
 #endif // TESTS_VERBOSE
+
+#ifdef _WIN32
+std::ofstream devnullstream("NUL");
+#else
+std::ofstream devnullstream("/dev/null");
+#endif
 
 // ===--- ESSENTIALS ---========================================================
 #define __ESSENTIALS
@@ -1799,7 +1807,14 @@ void read_bin_file_chunk(byte_t **bytes, size_t *size,
                          const char *file_name)
 {
     FILE *file = fopen(file_name, "rb");
-    assert(file != NULL && "Can't open file");
+    if (file == NULL)
+    {
+        if (!log_quiet_lvl)
+        {
+            std::cerr << "Can't open file: " << file_name << std::endl;
+        }
+        exit(1);
+    }
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
@@ -1827,7 +1842,14 @@ void write_bin_file_chunk(const byte_t *bytes, size_t size,
     {
         file = fopen(file_name, "wb");
     }
-    assert(file != NULL && "Can't open file");
+    if (file == NULL)
+    {
+        if (!log_quiet_lvl)
+        {
+            std::cerr << "Can't open file: " << file_name << std::endl;
+        }
+        exit(1);
+    }
     fseek(file, start, SEEK_SET);
     fwrite(bytes, 1, size, file);
     fclose(file);
@@ -1843,85 +1865,620 @@ size_t count_file_chunks(const char *file_name, size_t chunk_size)
     return (file_size + chunk_size - 1) / chunk_size;
 }
 
+size_t file_size(const char *file_name)
+{
+    FILE *file = fopen(file_name, "rb");
+    assert(file != NULL && "Can't open file");
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fclose(file);
+    return file_size;
+}
+
 template <typename T>
 T min(T a, T b)
 {
     return a < b ? a : b;
 }
 
+// ===--- <DEV> ---=============================================================
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef _DES_H_
+#define _DES_H_
+
+#define ENCRYPTION_MODE 1
+#define DECRYPTION_MODE 0
+
+typedef struct
+{
+    unsigned char k[8];
+    unsigned char c[4];
+    unsigned char d[4];
+} key_set;
+
+void generate_key(unsigned char *key);
+void generate_sub_keys(unsigned char *main_key, key_set *key_sets);
+void process_message(unsigned char *message_piece, unsigned char *processed_piece, key_set *key_sets, int mode);
+
+#endif
+
+int initial_key_permutaion[] = {57, 49, 41, 33, 25, 17, 9,
+                                1, 58, 50, 42, 34, 26, 18,
+                                10, 2, 59, 51, 43, 35, 27,
+                                19, 11, 3, 60, 52, 44, 36,
+                                63, 55, 47, 39, 31, 23, 15,
+                                7, 62, 54, 46, 38, 30, 22,
+                                14, 6, 61, 53, 45, 37, 29,
+                                21, 13, 5, 28, 20, 12, 4};
+
+int initial_message_permutation[] = {58, 50, 42, 34, 26, 18, 10, 2,
+                                     60, 52, 44, 36, 28, 20, 12, 4,
+                                     62, 54, 46, 38, 30, 22, 14, 6,
+                                     64, 56, 48, 40, 32, 24, 16, 8,
+                                     57, 49, 41, 33, 25, 17, 9, 1,
+                                     59, 51, 43, 35, 27, 19, 11, 3,
+                                     61, 53, 45, 37, 29, 21, 13, 5,
+                                     63, 55, 47, 39, 31, 23, 15, 7};
+
+int key_shift_sizes[] = {-1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1};
+
+int sub_key_permutation[] = {14, 17, 11, 24, 1, 5,
+                             3, 28, 15, 6, 21, 10,
+                             23, 19, 12, 4, 26, 8,
+                             16, 7, 27, 20, 13, 2,
+                             41, 52, 31, 37, 47, 55,
+                             30, 40, 51, 45, 33, 48,
+                             44, 49, 39, 56, 34, 53,
+                             46, 42, 50, 36, 29, 32};
+
+int message_expansion[] = {32, 1, 2, 3, 4, 5,
+                           4, 5, 6, 7, 8, 9,
+                           8, 9, 10, 11, 12, 13,
+                           12, 13, 14, 15, 16, 17,
+                           16, 17, 18, 19, 20, 21,
+                           20, 21, 22, 23, 24, 25,
+                           24, 25, 26, 27, 28, 29,
+                           28, 29, 30, 31, 32, 1};
+
+int S1[] = {14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
+            0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
+            4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0,
+            15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13};
+
+int S2[] = {15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10,
+            3, 13, 4, 7, 15, 2, 8, 14, 12, 0, 1, 10, 6, 9, 11, 5,
+            0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15,
+            13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9};
+
+int S3[] = {10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8,
+            13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1,
+            13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7,
+            1, 10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12};
+
+int S4[] = {7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15,
+            13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9,
+            10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4,
+            3, 15, 0, 6, 10, 1, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14};
+
+int S5[] = {2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9,
+            14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6,
+            4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14,
+            11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3};
+
+int S6[] = {12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11,
+            10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8,
+            9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6,
+            4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13};
+
+int S7[] = {4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1,
+            13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6,
+            1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2,
+            6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12};
+
+int S8[] = {13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7,
+            1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2,
+            7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8,
+            2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11};
+
+int right_sub_message_permutation[] = {16, 7, 20, 21,
+                                       29, 12, 28, 17,
+                                       1, 15, 23, 26,
+                                       5, 18, 31, 10,
+                                       2, 8, 24, 14,
+                                       32, 27, 3, 9,
+                                       19, 13, 30, 6,
+                                       22, 11, 4, 25};
+
+int final_message_permutation[] = {40, 8, 48, 16, 56, 24, 64, 32,
+                                   39, 7, 47, 15, 55, 23, 63, 31,
+                                   38, 6, 46, 14, 54, 22, 62, 30,
+                                   37, 5, 45, 13, 53, 21, 61, 29,
+                                   36, 4, 44, 12, 52, 20, 60, 28,
+                                   35, 3, 43, 11, 51, 19, 59, 27,
+                                   34, 2, 42, 10, 50, 18, 58, 26,
+                                   33, 1, 41, 9, 49, 17, 57, 25};
+
+void print_char_as_binary(char input)
+{
+    int i;
+    for (i = 0; i < 8; i++)
+    {
+        char shift_byte = 0x01 << (7 - i);
+        if (shift_byte & input)
+        {
+            printf("1");
+        }
+        else
+        {
+            printf("0");
+        }
+    }
+}
+
+void generate_key(unsigned char *key)
+{
+    int i;
+    for (i = 0; i < 8; i++)
+    {
+        key[i] = rand() % 255;
+    }
+}
+
+void print_key_set(key_set key_set)
+{
+    int i;
+    printf("K: \n");
+    for (i = 0; i < 8; i++)
+    {
+        printf("%02X : ", key_set.k[i]);
+        print_char_as_binary(key_set.k[i]);
+        printf("\n");
+    }
+    printf("\nC: \n");
+
+    for (i = 0; i < 4; i++)
+    {
+        printf("%02X : ", key_set.c[i]);
+        print_char_as_binary(key_set.c[i]);
+        printf("\n");
+    }
+    printf("\nD: \n");
+
+    for (i = 0; i < 4; i++)
+    {
+        printf("%02X : ", key_set.d[i]);
+        print_char_as_binary(key_set.d[i]);
+        printf("\n");
+    }
+    printf("\n");
+}
+
+void generate_sub_keys(unsigned char *main_key, key_set *key_sets)
+{
+    int i, j;
+    int shift_size;
+    unsigned char shift_byte, first_shift_bits, second_shift_bits, third_shift_bits, fourth_shift_bits;
+
+    for (i = 0; i < 8; i++)
+    {
+        key_sets[0].k[i] = 0;
+    }
+
+    for (i = 0; i < 56; i++)
+    {
+        shift_size = initial_key_permutaion[i];
+        shift_byte = 0x80 >> ((shift_size - 1) % 8);
+        shift_byte &= main_key[(shift_size - 1) / 8];
+        shift_byte <<= ((shift_size - 1) % 8);
+
+        key_sets[0].k[i / 8] |= (shift_byte >> i % 8);
+    }
+
+    for (i = 0; i < 3; i++)
+    {
+        key_sets[0].c[i] = key_sets[0].k[i];
+    }
+
+    key_sets[0].c[3] = key_sets[0].k[3] & 0xF0;
+
+    for (i = 0; i < 3; i++)
+    {
+        key_sets[0].d[i] = (key_sets[0].k[i + 3] & 0x0F) << 4;
+        key_sets[0].d[i] |= (key_sets[0].k[i + 4] & 0xF0) >> 4;
+    }
+
+    key_sets[0].d[3] = (key_sets[0].k[6] & 0x0F) << 4;
+
+    for (i = 1; i < 17; i++)
+    {
+        for (j = 0; j < 4; j++)
+        {
+            key_sets[i].c[j] = key_sets[i - 1].c[j];
+            key_sets[i].d[j] = key_sets[i - 1].d[j];
+        }
+
+        shift_size = key_shift_sizes[i];
+        if (shift_size == 1)
+        {
+            shift_byte = 0x80;
+        }
+        else
+        {
+            shift_byte = 0xC0;
+        }
+
+        // Process C
+        first_shift_bits = shift_byte & key_sets[i].c[0];
+        second_shift_bits = shift_byte & key_sets[i].c[1];
+        third_shift_bits = shift_byte & key_sets[i].c[2];
+        fourth_shift_bits = shift_byte & key_sets[i].c[3];
+
+        key_sets[i].c[0] <<= shift_size;
+        key_sets[i].c[0] |= (second_shift_bits >> (8 - shift_size));
+
+        key_sets[i].c[1] <<= shift_size;
+        key_sets[i].c[1] |= (third_shift_bits >> (8 - shift_size));
+
+        key_sets[i].c[2] <<= shift_size;
+        key_sets[i].c[2] |= (fourth_shift_bits >> (8 - shift_size));
+
+        key_sets[i].c[3] <<= shift_size;
+        key_sets[i].c[3] |= (first_shift_bits >> (4 - shift_size));
+
+        // Process D
+        first_shift_bits = shift_byte & key_sets[i].d[0];
+        second_shift_bits = shift_byte & key_sets[i].d[1];
+        third_shift_bits = shift_byte & key_sets[i].d[2];
+        fourth_shift_bits = shift_byte & key_sets[i].d[3];
+
+        key_sets[i].d[0] <<= shift_size;
+        key_sets[i].d[0] |= (second_shift_bits >> (8 - shift_size));
+
+        key_sets[i].d[1] <<= shift_size;
+        key_sets[i].d[1] |= (third_shift_bits >> (8 - shift_size));
+
+        key_sets[i].d[2] <<= shift_size;
+        key_sets[i].d[2] |= (fourth_shift_bits >> (8 - shift_size));
+
+        key_sets[i].d[3] <<= shift_size;
+        key_sets[i].d[3] |= (first_shift_bits >> (4 - shift_size));
+
+        for (j = 0; j < 48; j++)
+        {
+            shift_size = sub_key_permutation[j];
+            if (shift_size <= 28)
+            {
+                shift_byte = 0x80 >> ((shift_size - 1) % 8);
+                shift_byte &= key_sets[i].c[(shift_size - 1) / 8];
+                shift_byte <<= ((shift_size - 1) % 8);
+            }
+            else
+            {
+                shift_byte = 0x80 >> ((shift_size - 29) % 8);
+                shift_byte &= key_sets[i].d[(shift_size - 29) / 8];
+                shift_byte <<= ((shift_size - 29) % 8);
+            }
+
+            key_sets[i].k[j / 8] |= (shift_byte >> j % 8);
+        }
+    }
+}
+
+void process_message(unsigned char *message_piece, unsigned char *processed_piece, key_set *key_sets, int mode)
+{
+    int i, k;
+    int shift_size;
+    unsigned char shift_byte;
+
+    unsigned char initial_permutation[8];
+    memset(initial_permutation, 0, 8);
+    memset(processed_piece, 0, 8);
+
+    for (i = 0; i < 64; i++)
+    {
+        shift_size = initial_message_permutation[i];
+        shift_byte = 0x80 >> ((shift_size - 1) % 8);
+        shift_byte &= message_piece[(shift_size - 1) / 8];
+        shift_byte <<= ((shift_size - 1) % 8);
+
+        initial_permutation[i / 8] |= (shift_byte >> i % 8);
+    }
+
+    unsigned char l[4], r[4];
+    for (i = 0; i < 4; i++)
+    {
+        l[i] = initial_permutation[i];
+        r[i] = initial_permutation[i + 4];
+    }
+
+    unsigned char ln[4], rn[4], er[6], ser[4];
+
+    int key_index;
+    for (k = 1; k <= 16; k++)
+    {
+        memcpy(ln, r, 4);
+
+        memset(er, 0, 6);
+
+        for (i = 0; i < 48; i++)
+        {
+            shift_size = message_expansion[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= r[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            er[i / 8] |= (shift_byte >> i % 8);
+        }
+
+        if (mode == DECRYPTION_MODE)
+        {
+            key_index = 17 - k;
+        }
+        else
+        {
+            key_index = k;
+        }
+
+        for (i = 0; i < 6; i++)
+        {
+            er[i] ^= key_sets[key_index].k[i];
+        }
+
+        unsigned char row, column;
+
+        for (i = 0; i < 4; i++)
+        {
+            ser[i] = 0;
+        }
+
+        // 0000 0000 0000 0000 0000 0000
+        // rccc crrc cccr rccc crrc cccr
+
+        // Byte 1
+        row = 0;
+        row |= ((er[0] & 0x80) >> 6);
+        row |= ((er[0] & 0x04) >> 2);
+
+        column = 0;
+        column |= ((er[0] & 0x78) >> 3);
+
+        ser[0] |= ((unsigned char)S1[row * 16 + column] << 4);
+
+        row = 0;
+        row |= (er[0] & 0x02);
+        row |= ((er[1] & 0x10) >> 4);
+
+        column = 0;
+        column |= ((er[0] & 0x01) << 3);
+        column |= ((er[1] & 0xE0) >> 5);
+
+        ser[0] |= (unsigned char)S2[row * 16 + column];
+
+        // Byte 2
+        row = 0;
+        row |= ((er[1] & 0x08) >> 2);
+        row |= ((er[2] & 0x40) >> 6);
+
+        column = 0;
+        column |= ((er[1] & 0x07) << 1);
+        column |= ((er[2] & 0x80) >> 7);
+
+        ser[1] |= ((unsigned char)S3[row * 16 + column] << 4);
+
+        row = 0;
+        row |= ((er[2] & 0x20) >> 4);
+        row |= (er[2] & 0x01);
+
+        column = 0;
+        column |= ((er[2] & 0x1E) >> 1);
+
+        ser[1] |= (unsigned char)S4[row * 16 + column];
+
+        // Byte 3
+        row = 0;
+        row |= ((er[3] & 0x80) >> 6);
+        row |= ((er[3] & 0x04) >> 2);
+
+        column = 0;
+        column |= ((er[3] & 0x78) >> 3);
+
+        ser[2] |= ((unsigned char)S5[row * 16 + column] << 4);
+
+        row = 0;
+        row |= (er[3] & 0x02);
+        row |= ((er[4] & 0x10) >> 4);
+
+        column = 0;
+        column |= ((er[3] & 0x01) << 3);
+        column |= ((er[4] & 0xE0) >> 5);
+
+        ser[2] |= (unsigned char)S6[row * 16 + column];
+
+        // Byte 4
+        row = 0;
+        row |= ((er[4] & 0x08) >> 2);
+        row |= ((er[5] & 0x40) >> 6);
+
+        column = 0;
+        column |= ((er[4] & 0x07) << 1);
+        column |= ((er[5] & 0x80) >> 7);
+
+        ser[3] |= ((unsigned char)S7[row * 16 + column] << 4);
+
+        row = 0;
+        row |= ((er[5] & 0x20) >> 4);
+        row |= (er[5] & 0x01);
+
+        column = 0;
+        column |= ((er[5] & 0x1E) >> 1);
+
+        ser[3] |= (unsigned char)S8[row * 16 + column];
+
+        for (i = 0; i < 4; i++)
+        {
+            rn[i] = 0;
+        }
+
+        for (i = 0; i < 32; i++)
+        {
+            shift_size = right_sub_message_permutation[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= ser[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            rn[i / 8] |= (shift_byte >> i % 8);
+        }
+
+        for (i = 0; i < 4; i++)
+        {
+            rn[i] ^= l[i];
+        }
+
+        for (i = 0; i < 4; i++)
+        {
+            l[i] = ln[i];
+            r[i] = rn[i];
+        }
+    }
+
+    unsigned char pre_end_permutation[8];
+    for (i = 0; i < 4; i++)
+    {
+        pre_end_permutation[i] = r[i];
+        pre_end_permutation[4 + i] = l[i];
+    }
+
+    for (i = 0; i < 64; i++)
+    {
+        shift_size = final_message_permutation[i];
+        shift_byte = 0x80 >> ((shift_size - 1) % 8);
+        shift_byte &= pre_end_permutation[(shift_size - 1) / 8];
+        shift_byte <<= ((shift_size - 1) % 8);
+
+        processed_piece[i / 8] |= (shift_byte >> i % 8);
+    }
+}
 void dev_func()
 {
-    // auto iter = tq::tqdm(tq::range(0, 1000));
-    // iter.set_prefix("Progress: ");
-    // for (auto i : iter)
-    // {
-    //     usleep(10000);
-    // }
-    // std::cout << std::endl;
-    const char *input = "./build/vid.mp4";
-    const char *output = "./build/test.mp4";
-
-    size_t chunk_size = 1024 * 1014;
-    size_t chunk_count = count_file_chunks(input, chunk_size);
-    std::cout << "Chunks: " << chunk_count << std::endl;
-    std::cout << "Size: " << chunk_size * chunk_count / 1024 << std::endl;
-
-    byte_t *data;
-    size_t data_size;
-    auto iter = tq::tqdm(tq::range((size_t)0, chunk_count));
-    iter.set_prefix("Debug: ");
-    for (auto i : iter)
+    // Key gen
+    unsigned char *des_key = (unsigned char *)malloc(8 * sizeof(char));
+    generate_key(des_key);
+    printf("Key: ");
+    for (int i = 0; i < 8; i++)
     {
-        read_bin_file_chunk(&data, &data_size, i * chunk_size, (i + 1) * chunk_size, input);
-        write_bin_file_chunk(data, data_size, i * chunk_size, output);
-        free(data);
+        printf("%02X ", des_key[i]);
     }
-    std::cout << std::endl;
+    printf("\n");
+    // Encrypt
+    byte_t data[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
+    size_t data_size = sizeof(data) / sizeof(data[0]);
+    printf("Data: ");
+    for (int i = 0; i < data_size; i++)
+    {
+        printf("%02X ", data[i]);
+    }
+    printf("\n");
 
-    // byte_t data[] = {1, 2, 3, 4, 128, 255};
-    // size_t data_size = sizeof(data) / sizeof(data[0]);
+    short int bytes_written, process_mode;
+    unsigned long block_count = 0, number_of_blocks;
+    unsigned char *data_block = (unsigned char *)malloc(8 * sizeof(char));
+    unsigned char *processed_block = (unsigned char *)malloc(8 * sizeof(char));
+    key_set *key_sets = (key_set *)malloc(17 * sizeof(key_set));
 
-    // write_bin_file_chunk(data, data_size, 3465360, "./build/test.bin");
+    generate_sub_keys(des_key, key_sets);
 
-    // int_t *cif;
-    // size_t cif_size;
-    // byte_t *dec;
-    // size_t dec_size;
+    byte_t *enc_data = (byte_t *)malloc(data_size * sizeof(byte_t));
 
-    // printf("Data: ");
-    // print_array_hex(data, data_size);
+    number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
 
-    // rsa_cif(data, data_size, &cif, &cif_size, 197, 257);
+    for (block_count = 0; block_count < number_of_blocks; block_count++)
+    {
+        bytes_written = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            data_block[i] = 0;
+        }
 
-    // printf("Encoded: ");
-    // print_array_hex(cif, cif_size);
+        for (int i = 0; i < 8; i++)
+        {
+            if (bytes_written < data_size)
+            {
+                data_block[i] = data[bytes_written];
+            }
+            else if (bytes_written == data_size)
+            {
+                data_block[i] = 0x80;
+            }
+            else
+            {
+                data_block[i] = 0;
+            }
+            bytes_written++;
+        }
 
-    // byte_t *split;
-    // size_t split_size;
+        process_message(data_block, processed_block, key_sets, ENCRYPTION_MODE);
 
-    // split_array_to_bytes_N(cif, cif_size,
-    //                        &split, &split_size,
-    //                        257);
+        for (int i = 0; i < 8; i++)
+        {
+            enc_data[block_count * 8 + i] = processed_block[i];
+        }
+    }
 
-    // printf("Cif bytes: ");
-    // print_array_hex(split, split_size);
+    printf("Encrypted data: ");
+    for (int i = 0; i < data_size; i++)
+    {
+        printf("%02X ", enc_data[i]);
+    }
+    printf("\n");
 
-    // int_t *merged_bytes;
-    // size_t merged_size;
-    // merge_array_bytes_N<int_t>(split, split_size,
-    //                            &merged_bytes, &merged_size,
-    //                            257);
+    // Decrypt
+    byte_t *dec_data = (byte_t *)malloc(data_size * sizeof(byte_t));
 
-    // printf("Merged: ");
-    // print_array_hex(merged_bytes, merged_size);
+    for (block_count = 0; block_count < number_of_blocks; block_count++)
+    {
+        bytes_written = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            data_block[i] = 0;
+        }
 
-    // rsa_dcif(cif, cif_size, &dec, &dec_size, 1037, 257);
+        for (int i = 0; i < 8; i++)
+        {
+            if (bytes_written < data_size)
+            {
+                data_block[i] = enc_data[bytes_written];
+            }
+            else if (bytes_written == data_size)
+            {
+                data_block[i] = 0x80;
+            }
+            else
+            {
+                data_block[i] = 0;
+            }
+            bytes_written++;
+        }
 
-    // printf("Decoded: ");
-    // print_array_hex(dec, dec_size);
-    // free(cif);
-    // free(dec);
+        process_message(data_block, processed_block, key_sets, DECRYPTION_MODE);
+
+        for (int i = 0; i < 8; i++)
+        {
+            dec_data[block_count * 8 + i] = processed_block[i];
+        }
+    }
+
+    printf("Decrypted data: ");
+    for (int i = 0; i < data_size; i++)
+    {
+        printf("%02X ", dec_data[i]);
+    }
+    printf("\n");
 }
+
+// ===--- </DEV> ---============================================================
 
 int main(int argc, const char **argv)
 {
@@ -1941,11 +2498,11 @@ int main(int argc, const char **argv)
             OPT_HELP(),
 
             OPT_GROUP(C_HEADER "Basic options" C_RESET " "),
-            OPT_BOOLEAN('V', "verbose", &log_verbose,
+            OPT_BOOLEAN('V', "verbose", &log_verbose_lvl,
                         "log all processes", NULL, 0, 0),
-            OPT_BOOLEAN('Q', "quiet", &log_quiet,
+            OPT_BOOLEAN('Q', "quiet", &log_quiet_lvl,
                         "log only errors", NULL, 0, 0),
-            OPT_BOOLEAN((char)NULL, "shutup", &log_shutup,
+            OPT_BOOLEAN((char)NULL, "shutup", &log_shutup_lvl,
                         "log nothing", NULL, 0, 0),
             OPT_STRING('m', "mode", &mode,
                        "mode to run ('rsa'- RSA, 'elg' - ElGamal, "
@@ -2003,18 +2560,28 @@ int main(int argc, const char **argv)
             ime_exit_alt_screen();
             return 0;
         }
-        if (!log_verbose)
-            log_verbose = 0;
-        if (log_quiet)
+
+        // If nothing is set, set default logging level
+        if (log_verbose_lvl) // If 1 -> extended logging
         {
-            log_quiet = 1;
-            log_verbose = 0;
+            log_verbose_lvl = 1;
+            log_common_lvl = 1;
+            log_quiet_lvl = 1;
+            log_shutup_lvl = 1;
         }
-        if (log_shutup)
+        if (log_quiet_lvl) // If 1 -> quiet logging, only errors
         {
-            log_shutup = 1;
-            log_quiet = 1;
-            log_verbose = 0;
+            log_verbose_lvl = 0;
+            log_common_lvl = 0;
+            log_quiet_lvl = 1;
+            log_shutup_lvl = 1;
+        }
+        if (log_shutup_lvl) // If 1 -> no logging
+        {
+            log_verbose_lvl = 0;
+            log_common_lvl = 0;
+            log_quiet_lvl = 0;
+            log_shutup_lvl = 1;
         }
 
         if (dev)
@@ -2023,12 +2590,32 @@ int main(int argc, const char **argv)
             return 0;
         }
 
-        printf("%s\n", mode);
+        size_t chunk_size = 1024 * 1024; // 1MB
+        size_t chunk_count;
+
+        // Common data arrays.
+        byte_t *data;
+        size_t data_size;
+
+        int_t *data_int;
+        size_t data_int_size;
+
+        int_t *cif;
+        size_t cif_size;
+
+        byte_t *dcif;
+        size_t dcif_size;
+
+        byte_t *bytes;
+        size_t bytes_size;
+
+        printf("DBG: %s\n", mode);
         if (str_eq("rsa", mode))
         {
             if (encode)
             {
-                printf("RSA encode\n");
+                if (log_verbose_lvl)
+                    printf("RSA encode\n");
                 assert(file != NULL && "File path is required");
                 assert(ring != 0 && "N key is required");
                 assert(key != NULL && "Key is required");
@@ -2039,47 +2626,52 @@ int main(int argc, const char **argv)
                     strcat((char *)output, ".ciph");
                 }
 
-                byte_t *data;
-                size_t data_size;
-                read_bin_file(&data, &data_size, file);
-                if (!log_quiet)
-                {
-                    printf("Data: ");
-                    print_array_hex(data, data_size);
-                }
+                chunk_size = (file_size(file) / 100) + 1;
+                chunk_count = count_file_chunks(file, chunk_size);
 
-                int_t *cif;
-                size_t cif_size;
-                rsa_cif(data, data_size, &cif, &cif_size, atoi(key), atoi(ring));
-                if (!log_quiet)
-                {
-                    printf("Encoded: ");
-                    print_array_hex(cif, cif_size);
-                }
+                auto iter = tq::tqdm(tq::range((size_t)0, chunk_count));
+                iter.set_prefix("RSA encoding: ");
 
-                byte_t *bytes;
-                size_t bytes_size;
-                split_array_to_bytes_N(cif, cif_size,
-                                       &bytes, &bytes_size,
-                                       atoi(ring));
-                write_bin_file(bytes, bytes_size, output);
-                if (!log_quiet)
+                if (log_quiet_lvl)
+                    iter.set_ostream(devnullstream);
+                if (log_common_lvl)
+                    std::cout << "Chunk size: " << chunk_size << " bytes" << std::endl;
+                for (auto i : iter)
                 {
-                    printf("Written: ");
-                    print_array_hex(bytes, bytes_size);
-                }
+                    read_bin_file_chunk(&data, &data_size, i * chunk_size, (i + 1) * chunk_size, file);
+                    if (log_verbose_lvl)
+                    {
+                        printf("Data: ");
+                        print_array_hex(data, data_size);
+                    }
 
-                free(data);
-                free(cif);
-                free(bytes);
+                    rsa_cif(data, data_size, &cif, &cif_size, atoi(key), atoi(ring));
+                    if (log_verbose_lvl)
+                    {
+                        printf("Encoded: ");
+                        print_array_hex(cif, cif_size);
+                    }
+
+                    split_array_to_bytes_N(cif, cif_size,
+                                           &bytes, &bytes_size,
+                                           atoi(ring));
+                    write_bin_file_chunk(bytes, bytes_size, i * chunk_size * ((hex_num_len(atoi(ring)) + 1) / 2), output);
+                    if (log_verbose_lvl)
+                    {
+                        printf("Written: ");
+                        print_array_hex(bytes, bytes_size);
+                    }
+                    free(data);
+                    free(cif);
+                    free(bytes);
+                }
+                std::cout << std::endl;
             }
             else if (decode)
             {
-                printf("RSA decode\n");
                 assert(file != NULL && "File path is required");
                 assert(ring != 0 && "N key is required");
                 assert(key != NULL && "Key is required");
-                // check if file ends with .ciph
                 if (file != NULL && strlen(file) > 5)
                 {
                     if (strcmp(file + strlen(file) - 5, ".ciph") != 0)
@@ -2095,42 +2687,49 @@ int main(int argc, const char **argv)
                     ((char *)output)[strlen(file) - 5] = '\0';
                 }
 
-                byte_t *data;
-                size_t data_size;
-                read_bin_file(&data, &data_size, file);
-                if (!log_quiet)
-                {
-                    printf("Data: ");
-                    print_array_hex(data, data_size);
-                }
+                chunk_size = (file_size(file) / 100) + 1;
+                chunk_count = count_file_chunks(file, chunk_size);
 
-                int_t *data_int;
-                size_t data_int_size;
-                merge_array_bytes_N<int_t>(data, data_size, &data_int, &data_int_size, atoi(ring));
-                if (!log_quiet)
-                {
-                    printf("Data int: ");
-                    print_array(data_int, data_int_size);
-                }
+                auto iter = tq::tqdm(tq::range((size_t)0, chunk_count));
+                iter.set_prefix("RSA decoding: ");
 
-                byte_t *revert_bytes;
-                size_t revert_bytes_size;
-                rsa_dcif(data_int, data_int_size, &revert_bytes, &revert_bytes_size, atoi(key), atoi(ring));
-                if (!log_quiet)
+                if (log_quiet_lvl)
+                    iter.set_ostream(devnullstream);
+                if (log_common_lvl)
+                    std::cout << "Chunk size: " << chunk_size << " bytes" << std::endl;
+                for (auto i : iter)
                 {
-                    printf("Decoded: ");
-                    print_array_hex(revert_bytes, revert_bytes_size);
-                }
+                    read_bin_file_chunk(&data, &data_size, i * chunk_size, (i + 1) * chunk_size, file);
+                    if (log_verbose_lvl)
+                    {
+                        printf("Data: ");
+                        print_array_hex(data, data_size);
+                    }
 
-                write_bin_file(revert_bytes, revert_bytes_size, output);
-                if (!log_quiet)
-                {
-                    printf("Written: ");
-                    print_array_hex(revert_bytes, revert_bytes_size);
+                    merge_array_bytes_N<int_t>(data, data_size, &data_int, &data_int_size, atoi(ring));
+                    if (log_verbose_lvl)
+                    {
+                        printf("Data int: ");
+                        print_array(data_int, data_int_size);
+                    }
+
+                    rsa_dcif(data_int, data_int_size, &dcif, &dcif_size, atoi(key), atoi(ring));
+                    if (log_verbose_lvl)
+                    {
+                        printf("Decoded: ");
+                        print_array_hex(dcif, dcif_size);
+                    }
+
+                    write_bin_file_chunk(dcif, dcif_size, i * chunk_size / ((hex_num_len(atoi(ring)) + 1) / 2), output);
+                    if (log_verbose_lvl)
+                    {
+                        printf("Written: ");
+                        print_array_hex(dcif, dcif_size);
+                    }
+                    free(data);
+                    free(data_int);
+                    free(dcif);
                 }
-                free(data);
-                free(data_int);
-                free(revert_bytes);
                 free((void *)output);
             }
             else

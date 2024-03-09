@@ -31,8 +31,8 @@ run: build
 
 build: make_build_dir cifs.cpp
 	$(ECHO) $(SYS_MSG)
-	$(CPPC) $(CFLAGS) $(SYS_FLAGS) -I . -c cifs.cpp
-	$(CPPC) -o $(BUILD_DIR)/cifs$(EXE_EXTENSION) cifs.o
+	$(CPPC) $(CFLAGS) $(SYS_FLAGS) -I . -c cifs.cpp -o $(BUILD_DIR)/cifs.o
+	$(CPPC) -o $(BUILD_DIR)/cifs$(EXE_EXTENSION) $(BUILD_DIR)/cifs.o
 ifeq ($(TARGET),linux)
 	chmod +x $(BUILD_DIR)/cifs$(EXE_EXTENSION)
 endif
