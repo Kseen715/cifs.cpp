@@ -120,7 +120,7 @@ extern "C"
 #define __IME_STYLE_STR_BUFFER_SIZE 128
 
 #define ime_clear_screen() write(1, "\033[H\033[2J\033[3J", 11)
-#define ime_move_cursor(X, Y) printf("\033[%d;%dH", (Y), (X))
+#define ime_move_cursor(X, Y) printf("\033[%lld;%lldH", (Y), (X))
 #define ime_enter_alt_screen() puts("\033[?1049h\033[H")
 #define ime_exit_alt_screen() puts("\033[?1049l")
 
@@ -357,19 +357,19 @@ extern "C"
         return style;
     }
 
-    ADDAPI bool ADDCALL ime_is_stdin_tty()
-    {
-        return (isatty(fileno(stdin))
-                    ? "stdin is tty"
-                    : "stdin is not tty");
-    }
+    // ADDAPI bool ADDCALL ime_is_stdin_tty()
+    // {
+    //     return (isatty(fileno(stdin))
+    //                 ? "stdin is tty"
+    //                 : "stdin is not tty");
+    // }
 
-    ADDAPI bool ADDCALL ime_is_stdout_tty()
-    {
-        return (isatty(fileno(stdout))
-                    ? "stdout is tty"
-                    : "stdout is not tty");
-    }
+    // ADDAPI bool ADDCALL ime_is_stdout_tty()
+    // {
+    //     return (isatty(fileno(stdout))
+    //                 ? "stdout is tty"
+    //                 : "stdout is not tty");
+    // }
 
     // ADDAPI void ADDCALL ime_alloc_cells_linear(CellBuffer *buffer, int size)
     // {
@@ -611,30 +611,30 @@ extern "C"
         printf("\a");
     }
 
-    ADDAPI void ADDCALL ime_draw_line(CellBuffer *buf,
-                                      size_t lu_x, size_t lu_y,
-                                      size_t rb_x, size_t rb_y)
-    {
-        if (lu_x == rb_x)
-        {
-            for (unsigned i = lu_y; i < rb_y; i++)
-            {
-                buf->cells[lu_x * buf->rows + i]->symbol = 0xB3;
-            }
-        }
-        else if (lu_y == rb_y)
-        {
-            for (unsigned i = lu_x; i < rb_x; i++)
-            {
-                buf->cells[i * buf->rows + lu_y]->symbol = 0xC4;
-            }
-        }
-        else
-        {
-            ime_bell();
-            sleep(1);
-        }
-    }
+    // ADDAPI void ADDCALL ime_draw_line(CellBuffer *buf,
+    //                                   size_t lu_x, size_t lu_y,
+    //                                   size_t rb_x, size_t rb_y)
+    // {
+    //     if (lu_x == rb_x)
+    //     {
+    //         for (unsigned i = lu_y; i < rb_y; i++)
+    //         {
+    //             buf->cells[lu_x * buf->rows + i]->symbol = 0xB3;
+    //         }
+    //     }
+    //     else if (lu_y == rb_y)
+    //     {
+    //         for (unsigned i = lu_x; i < rb_x; i++)
+    //         {
+    //             buf->cells[i * buf->rows + lu_y]->symbol = 0xC4;
+    //         }
+    //     }
+    //     else
+    //     {
+    //         ime_bell();
+    //         sleep(1);
+    //     }
+    // }
 
 #endif // IMECLUI_IMPLEMENTATION
 
