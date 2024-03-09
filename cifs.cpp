@@ -117,9 +117,9 @@ int log_shutup_lvl = 0;  // No logs
 #endif // TESTS_VERBOSE
 
 #ifdef _WIN32
-std::ofstream devnullstream("NUL");
+std::ofstream devnull("NUL");
 #else
-std::ofstream devnullstream("/dev/null");
+std::ofstream devnull("/dev/null");
 #endif
 
 // ===--- ESSENTIALS ---========================================================
@@ -217,6 +217,12 @@ int_t get_multiplicative_inverse(int_t k, int_t p)
         }
     }
     return -1;
+}
+
+template <typename T>
+T min(T a, T b)
+{
+    return a < b ? a : b;
 }
 
 // ===--- RSA CIPHER ---========================================================
@@ -484,6 +490,699 @@ bool elgsig_check(int_t *cif, size_t cif_size,
         }
     }
     return true;
+}
+
+// ===--- DES CIPHER ---========================================================
+#define __DES_CIPHER
+
+#define DES_ENCRYPTION_MODE 1
+#define DES_DECRYPTION_MODE 0
+
+typedef struct des_key_sets
+{
+    byte_t k[8];
+    byte_t c[4];
+    byte_t d[4];
+} des_key_sets;
+
+byte_t __des_initial_key_permutaion[] = {0x39, 0x31, 0x29, 0x21,
+                                         0x19, 0x11, 0x09, 0x01,
+                                         0x3A, 0x32, 0x2A, 0x22,
+                                         0x1A, 0x12, 0x0A, 0x02,
+                                         0x3B, 0x33, 0x2B, 0x23,
+                                         0x1B, 0x13, 0x0B, 0x03,
+                                         0x3C, 0x34, 0x2C, 0x24,
+                                         0x3F, 0x37, 0x2F, 0x27,
+                                         0x1F, 0x17, 0x0F, 0x07,
+                                         0x3E, 0x36, 0x2E, 0x26,
+                                         0x1E, 0x16, 0x0E, 0x06,
+                                         0x3D, 0x35, 0x2D, 0x25,
+                                         0x1D, 0x15, 0x0D, 0x05,
+                                         0x1C, 0x14, 0x0C, 0x04};
+
+// Initial permutation (IP)
+byte_t __des_initial_message_permutation[] = {0x3A, 0x32, 0x2A, 0x22,
+                                              0x1A, 0x12, 0x0A, 0x02,
+                                              0x3C, 0x34, 0x2C, 0x24,
+                                              0x1C, 0x14, 0x0C, 0x04,
+                                              0x3E, 0x36, 0x2E, 0x26,
+                                              0x1E, 0x16, 0x0E, 0x06,
+                                              0x40, 0x38, 0x30, 0x28,
+                                              0x20, 0x18, 0x10, 0x08,
+                                              0x39, 0x31, 0x29, 0x21,
+                                              0x19, 0x11, 0x09, 0x01,
+                                              0x3B, 0x33, 0x2B, 0x23,
+                                              0x1B, 0x13, 0x0B, 0x03,
+                                              0x3D, 0x35, 0x2D, 0x25,
+                                              0x1D, 0x15, 0x0D, 0x05,
+                                              0x3F, 0x37, 0x2F, 0x27,
+                                              0x1F, 0x17, 0x0F, 0x07};
+
+// 17
+int __des_key_shift_sizes[] = {-1,
+                               1, 1, 2, 2, 2, 2, 2, 2,
+                               1, 2, 2, 2, 2, 2, 2, 1};
+
+// Subkey permutation
+byte_t __des_sub_key_permutation[] = {0x0E, 0x11, 0x0B, 0x18, 0x01, 0x05,
+                                      0x03, 0x1C, 0x0F, 0x06, 0x15, 0x0A,
+                                      0x17, 0x13, 0x0C, 0x04, 0x1A, 0x08,
+                                      0x10, 0x07, 0x1B, 0x14, 0x0D, 0x02,
+                                      0x29, 0x34, 0x1F, 0x25, 0x2F, 0x37,
+                                      0x1E, 0x28, 0x33, 0x2D, 0x21, 0x30,
+                                      0x2C, 0x31, 0x27, 0x38, 0x22, 0x35,
+                                      0x2E, 0x2A, 0x32, 0x24, 0x1D, 0x20};
+
+// Expansion table (E)
+byte_t __des_message_expansion[] = {0x20, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                    0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+                                    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+                                    0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11,
+                                    0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+                                    0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+                                    0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D,
+                                    0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x01};
+
+// S_i transformation tables
+byte_t __des_S1[] = {0x0E, 0x04, 0x0D, 0x01, 0x02, 0x0F, 0x0B, 0x08,
+                     0x03, 0x0A, 0x06, 0x0C, 0x05, 0x09, 0x00, 0x07,
+                     0x00, 0x0F, 0x07, 0x04, 0x0E, 0x02, 0x0D, 0x01,
+                     0x0A, 0x06, 0x0C, 0x0B, 0x09, 0x05, 0x03, 0x08,
+                     0x04, 0x01, 0x0E, 0x08, 0x0D, 0x06, 0x02, 0x0B,
+                     0x0F, 0x0C, 0x09, 0x07, 0x03, 0x0A, 0x05, 0x00,
+                     0x0F, 0x0C, 0x08, 0x02, 0x04, 0x09, 0x01, 0x07,
+                     0x05, 0x0B, 0x03, 0x0E, 0x0A, 0x00, 0x06, 0x0D};
+
+byte_t __des_S2[] = {0x0F, 0x01, 0x08, 0x0E, 0x06, 0x0B, 0x03, 0x04,
+                     0x09, 0x07, 0x02, 0x0D, 0x0C, 0x00, 0x05, 0x0A,
+                     0x03, 0x0D, 0x04, 0x07, 0x0F, 0x02, 0x08, 0x0E,
+                     0x0C, 0x00, 0x01, 0x0A, 0x06, 0x09, 0x0B, 0x05,
+                     0x00, 0x0E, 0x07, 0x0B, 0x0A, 0x04, 0x0D, 0x01,
+                     0x05, 0x08, 0x0C, 0x06, 0x09, 0x03, 0x02, 0x0F,
+                     0x0D, 0x08, 0x0A, 0x01, 0x03, 0x0F, 0x04, 0x02,
+                     0x0B, 0x06, 0x07, 0x0C, 0x00, 0x05, 0x0E, 0x09};
+
+byte_t __des_S3[] = {0x0A, 0x00, 0x09, 0x0E, 0x06, 0x03, 0x0F, 0x05,
+                     0x01, 0x0D, 0x0C, 0x07, 0x0B, 0x04, 0x02, 0x08,
+                     0x0D, 0x07, 0x00, 0x09, 0x03, 0x04, 0x06, 0x0A,
+                     0x02, 0x08, 0x05, 0x0E, 0x0C, 0x0B, 0x0F, 0x01,
+                     0x0D, 0x06, 0x04, 0x09, 0x08, 0x0F, 0x03, 0x00,
+                     0x0B, 0x01, 0x02, 0x0C, 0x05, 0x0A, 0x0E, 0x07,
+                     0x01, 0x0A, 0x0D, 0x00, 0x06, 0x09, 0x08, 0x07,
+                     0x04, 0x0F, 0x0E, 0x03, 0x0B, 0x05, 0x02, 0x0C};
+
+byte_t __des_S4[] = {0x07, 0x0D, 0x0E, 0x03, 0x00, 0x06, 0x09, 0x0A,
+                     0x01, 0x02, 0x08, 0x05, 0x0B, 0x0C, 0x04, 0x0F,
+                     0x0D, 0x08, 0x0B, 0x05, 0x06, 0x0F, 0x00, 0x03,
+                     0x04, 0x07, 0x02, 0x0C, 0x01, 0x0A, 0x0E, 0x09,
+                     0x0A, 0x06, 0x09, 0x00, 0x0C, 0x0B, 0x07, 0x0D,
+                     0x0F, 0x01, 0x03, 0x0E, 0x05, 0x02, 0x08, 0x04,
+                     0x03, 0x0F, 0x00, 0x06, 0x0A, 0x01, 0x0D, 0x08,
+                     0x09, 0x04, 0x05, 0x0B, 0x0C, 0x07, 0x02, 0x0E};
+
+byte_t __des_S5[] = {0x02, 0x0C, 0x04, 0x01, 0x07, 0x0A, 0x0B, 0x06,
+                     0x08, 0x05, 0x03, 0x0F, 0x0D, 0x00, 0x0E, 0x09,
+                     0x0E, 0x0B, 0x02, 0x0C, 0x04, 0x07, 0x0D, 0x01,
+                     0x05, 0x00, 0x0F, 0x0A, 0x03, 0x09, 0x08, 0x06,
+                     0x04, 0x02, 0x01, 0x0B, 0x0A, 0x0D, 0x07, 0x08,
+                     0x0F, 0x09, 0x0C, 0x05, 0x06, 0x03, 0x00, 0x0E,
+                     0x0B, 0x08, 0x0C, 0x07, 0x01, 0x0E, 0x02, 0x0D,
+                     0x06, 0x0F, 0x00, 0x09, 0x0A, 0x04, 0x05, 0x03};
+
+byte_t __des_S6[] = {0x0C, 0x01, 0x0A, 0x0F, 0x09, 0x02, 0x06, 0x08,
+                     0x00, 0x0D, 0x03, 0x04, 0x0E, 0x07, 0x05, 0x0B,
+                     0x0A, 0x0F, 0x04, 0x02, 0x07, 0x0C, 0x09, 0x05,
+                     0x06, 0x01, 0x0D, 0x0E, 0x00, 0x0B, 0x03, 0x08,
+                     0x09, 0x0E, 0x0F, 0x05, 0x02, 0x08, 0x0C, 0x03,
+                     0x07, 0x00, 0x04, 0x0A, 0x01, 0x0D, 0x0B, 0x06,
+                     0x04, 0x03, 0x02, 0x0C, 0x09, 0x05, 0x0F, 0x0A,
+                     0x0B, 0x0E, 0x01, 0x07, 0x06, 0x00, 0x08, 0x0D};
+
+byte_t __des_S7[] = {0x04, 0x0B, 0x02, 0x0E, 0x0F, 0x00, 0x08, 0x0D,
+                     0x03, 0x0C, 0x09, 0x07, 0x05, 0x0A, 0x06, 0x01,
+                     0x0D, 0x00, 0x0B, 0x07, 0x04, 0x09, 0x01, 0x0A,
+                     0x0E, 0x03, 0x05, 0x0C, 0x02, 0x0F, 0x08, 0x06,
+                     0x01, 0x04, 0x0B, 0x0D, 0x0C, 0x03, 0x07, 0x0E,
+                     0x0A, 0x0F, 0x06, 0x08, 0x00, 0x05, 0x09, 0x02,
+                     0x06, 0x0B, 0x0D, 0x08, 0x01, 0x04, 0x0A, 0x07,
+                     0x09, 0x05, 0x00, 0x0F, 0x0E, 0x02, 0x03, 0x0C};
+
+byte_t __des_S8[] = {0x0D, 0x02, 0x08, 0x04, 0x06, 0x0F, 0x0B, 0x01,
+                     0x0A, 0x09, 0x03, 0x0E, 0x05, 0x00, 0x0C, 0x07,
+                     0x01, 0x0F, 0x0D, 0x08, 0x0A, 0x03, 0x07, 0x04,
+                     0x0C, 0x05, 0x06, 0x0B, 0x00, 0x0E, 0x09, 0x02,
+                     0x07, 0x0B, 0x04, 0x01, 0x09, 0x0C, 0x0E, 0x02,
+                     0x00, 0x06, 0x0A, 0x0D, 0x0F, 0x03, 0x05, 0x08,
+                     0x02, 0x01, 0x0E, 0x07, 0x04, 0x0A, 0x08, 0x0D,
+                     0x0F, 0x0C, 0x09, 0x00, 0x03, 0x05, 0x06, 0x0B};
+
+// Permutation table (P)
+byte_t __des_right_sub_msg_permut[] = {0x10, 0x07, 0x14, 0x15,
+                                       0x1D, 0x0C, 0x1C, 0x11,
+                                       0x01, 0x0F, 0x17, 0x1A,
+                                       0x05, 0x12, 0x1F, 0x0A,
+                                       0x02, 0x08, 0x18, 0x0E,
+                                       0x20, 0x1B, 0x03, 0x09,
+                                       0x13, 0x0D, 0x1E, 0x06,
+                                       0x16, 0x0B, 0x04, 0x19};
+
+// Final permutation (IP^-1)
+byte_t __des_final_msg_permut[] = {0x28, 0x08, 0x30, 0x10,
+                                   0x38, 0x18, 0x40, 0x20,
+                                   0x27, 0x07, 0x2F, 0x0F,
+                                   0x37, 0x17, 0x3F, 0x1F,
+                                   0x26, 0x06, 0x2E, 0x0E,
+                                   0x36, 0x16, 0x3E, 0x1E,
+                                   0x25, 0x05, 0x2D, 0x0D,
+                                   0x35, 0x15, 0x3D, 0x1D,
+                                   0x24, 0x04, 0x2C, 0x0C,
+                                   0x34, 0x14, 0x3C, 0x1C,
+                                   0x23, 0x03, 0x2B, 0x0B,
+                                   0x33, 0x13, 0x3B, 0x1B,
+                                   0x22, 0x02, 0x2A, 0x0A,
+                                   0x32, 0x12, 0x3A, 0x1A,
+                                   0x21, 0x01, 0x29, 0x09,
+                                   0x31, 0x11, 0x39, 0x19};
+
+bool __des_is_key_weak(byte_t *key)
+{
+    byte_t weak_key1[] = {0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01};
+    byte_t weak_key2[] = {0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE};
+    byte_t weak_key3[] = {0xE0, 0xE0, 0xE0, 0xE0, 0xF1, 0xF1, 0xF1, 0xF1};
+    byte_t weak_key4[] = {0x1F, 0x1F, 0x1F, 0x1F, 0x0E, 0x0E, 0x0E, 0x0E};
+
+    return memcmp(key, weak_key1, 8) == 0 ||
+           memcmp(key, weak_key2, 8) == 0 ||
+           memcmp(key, weak_key3, 8) == 0 ||
+           memcmp(key, weak_key4, 8) == 0;
+}
+
+bool __des_is_key_semi_weak(byte_t *key)
+{
+    byte_t s_weak_key_01[] = {0x01, 0xFE, 0x01, 0xFE, 0x01, 0xFE, 0x01, 0xFE};
+    byte_t s_weak_key_02[] = {0xFE, 0x01, 0xFE, 0x01, 0xFE, 0x01, 0xFE, 0x01};
+    byte_t s_weak_key_03[] = {0x1F, 0xE0, 0x1F, 0xE0, 0x0E, 0xF1, 0x0E, 0xF1};
+    byte_t s_weak_key_04[] = {0xE0, 0x1F, 0xE0, 0x1F, 0xF1, 0x0E, 0xF1, 0x0E};
+    byte_t s_weak_key_05[] = {0x01, 0xE0, 0x01, 0xE0, 0x01, 0xF1, 0x01, 0xF1};
+    byte_t s_weak_key_06[] = {0xE0, 0x01, 0xE0, 0x01, 0xF1, 0x01, 0xF1, 0x01};
+    byte_t s_weak_key_07[] = {0x1F, 0xFE, 0x1F, 0xFE, 0x0E, 0xFE, 0x0E, 0xFE};
+    byte_t s_weak_key_08[] = {0xFE, 0x1F, 0xFE, 0x1F, 0xFE, 0x0E, 0xFE, 0x0E};
+    byte_t s_weak_key_09[] = {0x01, 0x1F, 0x01, 0x1F, 0x01, 0x0E, 0x01, 0x0E};
+    byte_t s_weak_key_10[] = {0x1F, 0x01, 0x1F, 0x01, 0x0E, 0x01, 0x0E, 0x01};
+    byte_t s_weak_key_11[] = {0xFE, 0xE0, 0xFE, 0xE0, 0xFE, 0xF1, 0xFE, 0xF1};
+    byte_t s_weak_key_12[] = {0xE0, 0xFE, 0xE0, 0xFE, 0xF1, 0xFE, 0xF1, 0xFE};
+
+    return memcmp(key, s_weak_key_01, 8) == 0 ||
+           memcmp(key, s_weak_key_02, 8) == 0 ||
+           memcmp(key, s_weak_key_03, 8) == 0 ||
+           memcmp(key, s_weak_key_04, 8) == 0 ||
+           memcmp(key, s_weak_key_05, 8) == 0 ||
+           memcmp(key, s_weak_key_06, 8) == 0 ||
+           memcmp(key, s_weak_key_07, 8) == 0 ||
+           memcmp(key, s_weak_key_08, 8) == 0 ||
+           memcmp(key, s_weak_key_09, 8) == 0 ||
+           memcmp(key, s_weak_key_10, 8) == 0 ||
+           memcmp(key, s_weak_key_11, 8) == 0 ||
+           memcmp(key, s_weak_key_12, 8) == 0;
+}
+
+bool __des_is_key_acceptable(byte_t *key)
+{
+    return !__des_is_key_weak(key) && !__des_is_key_semi_weak(key);
+}
+
+/*
+main_key - 64 bit key
+key_sets - array of (+1)16 key sets
+*/
+void __des_generate_sub_keys(byte_t *main_key, des_key_sets *key_sets)
+{
+    int i, j;
+    int shift_size;
+    byte_t shift_byte,
+        first_shift_bits,
+        second_shift_bits,
+        third_shift_bits,
+        fourth_shift_bits;
+
+    // Zero out first key set's k
+    for (i = 0; i < 8; i++)
+    {
+        key_sets[0].k[i] = 0;
+    }
+
+    // Generate first key set's k
+    for (i = 0; i < 56; i++)
+    {
+        shift_size = __des_initial_key_permutaion[i];
+        shift_byte = 0x80 >> ((shift_size - 1) % 8);
+        shift_byte &= main_key[(shift_size - 1) / 8];
+        shift_byte <<= ((shift_size - 1) % 8);
+
+        key_sets[0].k[i / 8] |= (shift_byte >> i % 8);
+    }
+
+    // Copy first 3 bytes of k to c
+    for (i = 0; i < 3; i++)
+    {
+        key_sets[0].c[i] = key_sets[0].k[i];
+    }
+
+    // Copy last byte of k to c and mask it
+    key_sets[0].c[3] = key_sets[0].k[3] & 0xF0;
+
+    // Copy last 4 bytes of k to d
+    for (i = 0; i < 3; i++)
+    {
+        key_sets[0].d[i] = (key_sets[0].k[i + 3] & 0x0F) << 4;
+        key_sets[0].d[i] |= (key_sets[0].k[i + 4] & 0xF0) >> 4;
+    }
+
+    // Mask last byte of d
+    key_sets[0].d[3] = (key_sets[0].k[6] & 0x0F) << 4;
+
+    // Generate 16 sub keys
+    for (i = 1; i < 17; i++)
+    {
+        // Copy previous key set to current
+        for (j = 0; j < 4; j++)
+        {
+            key_sets[i].c[j] = key_sets[i - 1].c[j];
+            key_sets[i].d[j] = key_sets[i - 1].d[j];
+        }
+
+        shift_size = __des_key_shift_sizes[i];
+        if (shift_size == 1)
+        {
+            shift_byte = 0x80;
+        }
+        else
+        {
+            shift_byte = 0xC0;
+        }
+
+        // Process C
+        first_shift_bits = shift_byte & key_sets[i].c[0];
+        second_shift_bits = shift_byte & key_sets[i].c[1];
+        third_shift_bits = shift_byte & key_sets[i].c[2];
+        fourth_shift_bits = shift_byte & key_sets[i].c[3];
+
+        key_sets[i].c[0] <<= shift_size;
+        key_sets[i].c[0] |= (second_shift_bits >> (8 - shift_size));
+
+        key_sets[i].c[1] <<= shift_size;
+        key_sets[i].c[1] |= (third_shift_bits >> (8 - shift_size));
+
+        key_sets[i].c[2] <<= shift_size;
+        key_sets[i].c[2] |= (fourth_shift_bits >> (8 - shift_size));
+
+        key_sets[i].c[3] <<= shift_size;
+        key_sets[i].c[3] |= (first_shift_bits >> (4 - shift_size));
+
+        // Process D
+        first_shift_bits = shift_byte & key_sets[i].d[0];
+        second_shift_bits = shift_byte & key_sets[i].d[1];
+        third_shift_bits = shift_byte & key_sets[i].d[2];
+        fourth_shift_bits = shift_byte & key_sets[i].d[3];
+
+        key_sets[i].d[0] <<= shift_size;
+        key_sets[i].d[0] |= (second_shift_bits >> (8 - shift_size));
+
+        key_sets[i].d[1] <<= shift_size;
+        key_sets[i].d[1] |= (third_shift_bits >> (8 - shift_size));
+
+        key_sets[i].d[2] <<= shift_size;
+        key_sets[i].d[2] |= (fourth_shift_bits >> (8 - shift_size));
+
+        key_sets[i].d[3] <<= shift_size;
+        key_sets[i].d[3] |= (first_shift_bits >> (4 - shift_size));
+
+        // Merge C and D to generate K
+        for (j = 0; j < 48; j++)
+        {
+            shift_size = __des_sub_key_permutation[j];
+            if (shift_size <= 28)
+            {
+                shift_byte = 0x80 >> ((shift_size - 1) % 8);
+                shift_byte &= key_sets[i].c[(shift_size - 1) / 8];
+                shift_byte <<= ((shift_size - 1) % 8);
+            }
+            else
+            {
+                shift_byte = 0x80 >> ((shift_size - 29) % 8);
+                shift_byte &= key_sets[i].d[(shift_size - 29) / 8];
+                shift_byte <<= ((shift_size - 29) % 8);
+            }
+
+            key_sets[i].k[j / 8] |= (shift_byte >> j % 8);
+        }
+    }
+}
+
+/*
+data_block - 64 bit block (8 bytes)
+processed_block - 64 bit block (8 bytes)
+key_sets - array of (+1)16 key sets
+mode - 1 for encryption, 0 for decryption
+*/
+void __des_process_data_block(byte_t *data_block,
+                              byte_t *processed_block,
+                              des_key_sets *key_sets,
+                              int mode)
+{
+    int i, k;
+    int shift_size;
+    byte_t shift_byte;
+
+    byte_t initial_permutation[8];
+    memset(initial_permutation, 0, 8);
+    memset(processed_block, 0, 8);
+
+    // Initial permutation
+    for (i = 0; i < 64; i++)
+    {
+        shift_size = __des_initial_message_permutation[i];
+        shift_byte = 0x80 >> ((shift_size - 1) % 8);
+        shift_byte &= data_block[(shift_size - 1) / 8];
+        shift_byte <<= ((shift_size - 1) % 8);
+
+        initial_permutation[i / 8] |= (shift_byte >> i % 8);
+    }
+
+    // Split message into two 32-bit pieces
+    byte_t l[4], r[4];
+    for (i = 0; i < 4; i++)
+    {
+        l[i] = initial_permutation[i];
+        r[i] = initial_permutation[i + 4];
+    }
+
+    byte_t ln[4], rn[4], er[6], ser[4];
+
+    // 16 rounds of Feistel network
+    int key_index;
+    for (k = 1; k <= 16; k++)
+    {
+        memcpy(ln, r, 4);
+        memset(er, 0, 6);
+
+        // Expansion permutation (E)
+        for (i = 0; i < 48; i++)
+        {
+            shift_size = __des_message_expansion[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= r[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            er[i / 8] |= (shift_byte >> i % 8);
+        }
+
+        // If decryption mode, use keys in reverse order
+        if (mode == DES_DECRYPTION_MODE)
+        {
+            key_index = 17 - k;
+        }
+        else
+        {
+            key_index = k;
+        }
+
+        // XOR with key
+        for (i = 0; i < 6; i++)
+        {
+            er[i] ^= key_sets[key_index].k[i];
+        }
+
+        byte_t row, column;
+
+        for (i = 0; i < 4; i++)
+        {
+            ser[i] = 0;
+        }
+
+        // S-Box substitution
+
+        // 0000 0000 0000 0000 0000 0000
+        // rccc crrc cccr rccc crrc cccr
+
+        // Byte 1
+        row = 0;
+        row |= ((er[0] & 0x80) >> 6);
+        row |= ((er[0] & 0x04) >> 2);
+
+        column = 0;
+        column |= ((er[0] & 0x78) >> 3);
+
+        ser[0] |= ((byte_t)__des_S1[row * 16 + column] << 4);
+
+        row = 0;
+        row |= (er[0] & 0x02);
+        row |= ((er[1] & 0x10) >> 4);
+
+        column = 0;
+        column |= ((er[0] & 0x01) << 3);
+        column |= ((er[1] & 0xE0) >> 5);
+
+        ser[0] |= (byte_t)__des_S2[row * 16 + column];
+
+        // Byte 2
+        row = 0;
+        row |= ((er[1] & 0x08) >> 2);
+        row |= ((er[2] & 0x40) >> 6);
+
+        column = 0;
+        column |= ((er[1] & 0x07) << 1);
+        column |= ((er[2] & 0x80) >> 7);
+
+        ser[1] |= ((byte_t)__des_S3[row * 16 + column] << 4);
+
+        row = 0;
+        row |= ((er[2] & 0x20) >> 4);
+        row |= (er[2] & 0x01);
+
+        column = 0;
+        column |= ((er[2] & 0x1E) >> 1);
+
+        ser[1] |= (byte_t)__des_S4[row * 16 + column];
+
+        // Byte 3
+        row = 0;
+        row |= ((er[3] & 0x80) >> 6);
+        row |= ((er[3] & 0x04) >> 2);
+
+        column = 0;
+        column |= ((er[3] & 0x78) >> 3);
+
+        ser[2] |= ((byte_t)__des_S5[row * 16 + column] << 4);
+
+        row = 0;
+        row |= (er[3] & 0x02);
+        row |= ((er[4] & 0x10) >> 4);
+
+        column = 0;
+        column |= ((er[3] & 0x01) << 3);
+        column |= ((er[4] & 0xE0) >> 5);
+
+        ser[2] |= (byte_t)__des_S6[row * 16 + column];
+
+        // Byte 4
+        row = 0;
+        row |= ((er[4] & 0x08) >> 2);
+        row |= ((er[5] & 0x40) >> 6);
+
+        column = 0;
+        column |= ((er[4] & 0x07) << 1);
+        column |= ((er[5] & 0x80) >> 7);
+
+        ser[3] |= ((byte_t)__des_S7[row * 16 + column] << 4);
+
+        row = 0;
+        row |= ((er[5] & 0x20) >> 4);
+        row |= (er[5] & 0x01);
+
+        column = 0;
+        column |= ((er[5] & 0x1E) >> 1);
+
+        ser[3] |= (byte_t)__des_S8[row * 16 + column];
+
+        for (i = 0; i < 4; i++)
+        {
+            rn[i] = 0;
+        }
+
+        // Straight permutation (P)
+        for (i = 0; i < 32; i++)
+        {
+            shift_size = __des_right_sub_msg_permut[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= ser[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            rn[i / 8] |= (shift_byte >> i % 8);
+        }
+
+        for (i = 0; i < 4; i++)
+        {
+            rn[i] ^= l[i];
+        }
+
+        for (i = 0; i < 4; i++)
+        {
+            l[i] = ln[i];
+            r[i] = rn[i];
+        }
+    }
+
+    // Combine R and L, pre-end permutation
+    byte_t pre_end_permutation[8];
+    for (i = 0; i < 4; i++)
+    {
+        pre_end_permutation[i] = r[i];
+        pre_end_permutation[4 + i] = l[i];
+    }
+
+    for (i = 0; i < 64; i++)
+    {
+        shift_size = __des_final_msg_permut[i];
+        shift_byte = 0x80 >> ((shift_size - 1) % 8);
+        shift_byte &= pre_end_permutation[(shift_size - 1) / 8];
+        shift_byte <<= ((shift_size - 1) % 8);
+
+        processed_block[i / 8] |= (shift_byte >> i % 8);
+    }
+}
+
+void __des_encrypt_block(byte_t *data_block,
+                         byte_t *processed_block,
+                         des_key_sets *key_sets)
+{
+    __des_process_data_block(data_block, processed_block, key_sets, DES_ENCRYPTION_MODE);
+}
+
+void __des_decrypt_block(byte_t *data_block,
+                         byte_t *processed_block,
+                         des_key_sets *key_sets)
+{
+    __des_process_data_block(data_block, processed_block, key_sets, DES_DECRYPTION_MODE);
+}
+
+void des_generate_key(byte_t *key)
+{
+    srand(time(0));
+    do
+    {
+        int i;
+        for (i = 0; i < 8; i++)
+        {
+            key[i] = rand() % 255;
+        }
+    } while (!__des_is_key_acceptable(key));
+}
+
+void des_encrypt(byte_t *data, size_t data_size,
+                 byte_t *enc_data, size_t *enc_data_size,
+                 byte_t *des_key)
+{
+    short int bytes_written;
+    unsigned long block_count = 0, number_of_blocks;
+    byte_t *data_block = ALLOC(byte_t, 8);
+    byte_t *processed_block = ALLOC(byte_t, 8);
+    des_key_sets *key_sets = ALLOC(des_key_sets, 17);
+
+    __des_generate_sub_keys(des_key, key_sets);
+
+    number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
+
+    for (block_count = 0; block_count < number_of_blocks; block_count++)
+    {
+        bytes_written = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            data_block[i] = 0;
+        }
+
+        for (int i = 0; i < 8; i++)
+        {
+            if ((size_t)bytes_written < data_size)
+            {
+                data_block[i] = data[block_count * 8 + bytes_written];
+            }
+            else if ((size_t)bytes_written == data_size)
+            {
+                data_block[i] = 0x80;
+            }
+            else
+            {
+                data_block[i] = 0;
+            }
+            bytes_written++;
+        }
+
+        __des_encrypt_block(data_block, processed_block, key_sets);
+
+        for (int i = 0; i < 8; i++)
+        {
+            enc_data[block_count * 8 + i] = processed_block[i];
+        }
+    }
+
+    *enc_data_size = data_size;
+    free(data_block);
+    free(processed_block);
+    free(key_sets);
+}
+
+void des_decrypt(byte_t *data, size_t data_size,
+                 byte_t *dec_data, size_t *dec_data_size,
+                 byte_t *des_key)
+{
+    short int bytes_written;
+    unsigned long block_count = 0, number_of_blocks;
+    byte_t *data_block = ALLOC(byte_t, 8);
+    byte_t *processed_block = ALLOC(byte_t, 8);
+    des_key_sets *key_sets = ALLOC(des_key_sets, 17);
+
+    __des_generate_sub_keys(des_key, key_sets);
+
+    number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
+
+    for (block_count = 0; block_count < number_of_blocks; block_count++)
+    {
+        bytes_written = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            data_block[i] = 0;
+        }
+
+        for (int i = 0; i < 8; i++)
+        {
+            if ((size_t)bytes_written < data_size)
+            {
+                data_block[i] = data[block_count * 8 + bytes_written];
+            }
+            else if ((size_t)bytes_written == data_size)
+            {
+                data_block[i] = 0x80;
+            }
+            else
+            {
+                data_block[i] = 0;
+            }
+            bytes_written++;
+        }
+
+        __des_decrypt_block(data_block, processed_block, key_sets);
+
+        for (int i = 0; i < 8; i++)
+        {
+            dec_data[block_count * 8 + i] = processed_block[i];
+        }
+    }
+
+    *dec_data_size = data_size;
+    free(data_block);
+    free(processed_block);
+    free(key_sets);
 }
 
 // ===--- BENCHMARKS ---========================================================
@@ -936,23 +1635,40 @@ void read_dump_from_bin_file(int_t **data, size_t *data_size, const char *file_n
 template <typename T>
 void print_array(T *data, size_t data_size)
 {
-    printf("[");
+    printf("{");
     for (size_t i = 0; i < data_size - 1; i++)
     {
         printf("%u, ", data[i]);
     }
-    printf("%u]\n", data[data_size - 1]);
+    printf("%u}\n", data[data_size - 1]);
 }
 
 template <typename T>
 void print_array_hex(T *data, size_t data_size)
 {
-    printf("(%lld)[", data_size);
+    printf("(%lld){", data_size);
     for (size_t i = 0; i < data_size - 1; i++)
     {
         printf("0x%0*X, ", (int)sizeof(T) * 2, data[i]);
     }
-    printf("0x%0*X]\n", (int)sizeof(T) * 2, data[data_size - 1]);
+    printf("0x%0*X}\n", (int)sizeof(T) * 2, data[data_size - 1]);
+}
+
+void print_byte_bin(byte_t byte)
+{
+    int i;
+    for (i = 0; i < 8; i++)
+    {
+        byte_t shift_byte = 0x01 << (7 - i);
+        if (shift_byte & byte)
+        {
+            printf("1");
+        }
+        else
+        {
+            printf("0");
+        }
+    }
 }
 
 bool cmp_arrays(int_t *arr1, size_t arr1_size, int_t *arr2, size_t arr2_size)
@@ -1875,607 +2591,41 @@ size_t file_size(const char *file_name)
     return file_size;
 }
 
-template <typename T>
-T min(T a, T b)
-{
-    return a < b ? a : b;
-}
-
 // ===--- <DEV> ---=============================================================
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#ifndef _DES_H_
-#define _DES_H_
-
-#define ENCRYPTION_MODE 1
-#define DECRYPTION_MODE 0
-
-typedef struct
-{
-    unsigned char k[8];
-    unsigned char c[4];
-    unsigned char d[4];
-} key_set;
-
-void generate_key(unsigned char *key);
-void generate_sub_keys(unsigned char *main_key, key_set *key_sets);
-void process_message(unsigned char *message_piece, unsigned char *processed_piece, key_set *key_sets, int mode);
-
-#endif
-
-int initial_key_permutaion[] = {57, 49, 41, 33, 25, 17, 9,
-                                1, 58, 50, 42, 34, 26, 18,
-                                10, 2, 59, 51, 43, 35, 27,
-                                19, 11, 3, 60, 52, 44, 36,
-                                63, 55, 47, 39, 31, 23, 15,
-                                7, 62, 54, 46, 38, 30, 22,
-                                14, 6, 61, 53, 45, 37, 29,
-                                21, 13, 5, 28, 20, 12, 4};
-
-int initial_message_permutation[] = {58, 50, 42, 34, 26, 18, 10, 2,
-                                     60, 52, 44, 36, 28, 20, 12, 4,
-                                     62, 54, 46, 38, 30, 22, 14, 6,
-                                     64, 56, 48, 40, 32, 24, 16, 8,
-                                     57, 49, 41, 33, 25, 17, 9, 1,
-                                     59, 51, 43, 35, 27, 19, 11, 3,
-                                     61, 53, 45, 37, 29, 21, 13, 5,
-                                     63, 55, 47, 39, 31, 23, 15, 7};
-
-int key_shift_sizes[] = {-1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1};
-
-int sub_key_permutation[] = {14, 17, 11, 24, 1, 5,
-                             3, 28, 15, 6, 21, 10,
-                             23, 19, 12, 4, 26, 8,
-                             16, 7, 27, 20, 13, 2,
-                             41, 52, 31, 37, 47, 55,
-                             30, 40, 51, 45, 33, 48,
-                             44, 49, 39, 56, 34, 53,
-                             46, 42, 50, 36, 29, 32};
-
-int message_expansion[] = {32, 1, 2, 3, 4, 5,
-                           4, 5, 6, 7, 8, 9,
-                           8, 9, 10, 11, 12, 13,
-                           12, 13, 14, 15, 16, 17,
-                           16, 17, 18, 19, 20, 21,
-                           20, 21, 22, 23, 24, 25,
-                           24, 25, 26, 27, 28, 29,
-                           28, 29, 30, 31, 32, 1};
-
-int S1[] = {14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
-            0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
-            4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0,
-            15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13};
-
-int S2[] = {15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10,
-            3, 13, 4, 7, 15, 2, 8, 14, 12, 0, 1, 10, 6, 9, 11, 5,
-            0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15,
-            13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9};
-
-int S3[] = {10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8,
-            13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1,
-            13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7,
-            1, 10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12};
-
-int S4[] = {7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15,
-            13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9,
-            10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4,
-            3, 15, 0, 6, 10, 1, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14};
-
-int S5[] = {2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9,
-            14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6,
-            4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14,
-            11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3};
-
-int S6[] = {12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11,
-            10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8,
-            9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6,
-            4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13};
-
-int S7[] = {4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1,
-            13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6,
-            1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2,
-            6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12};
-
-int S8[] = {13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7,
-            1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2,
-            7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8,
-            2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11};
-
-int right_sub_message_permutation[] = {16, 7, 20, 21,
-                                       29, 12, 28, 17,
-                                       1, 15, 23, 26,
-                                       5, 18, 31, 10,
-                                       2, 8, 24, 14,
-                                       32, 27, 3, 9,
-                                       19, 13, 30, 6,
-                                       22, 11, 4, 25};
-
-int final_message_permutation[] = {40, 8, 48, 16, 56, 24, 64, 32,
-                                   39, 7, 47, 15, 55, 23, 63, 31,
-                                   38, 6, 46, 14, 54, 22, 62, 30,
-                                   37, 5, 45, 13, 53, 21, 61, 29,
-                                   36, 4, 44, 12, 52, 20, 60, 28,
-                                   35, 3, 43, 11, 51, 19, 59, 27,
-                                   34, 2, 42, 10, 50, 18, 58, 26,
-                                   33, 1, 41, 9, 49, 17, 57, 25};
-
-void print_char_as_binary(char input)
-{
-    int i;
-    for (i = 0; i < 8; i++)
-    {
-        char shift_byte = 0x01 << (7 - i);
-        if (shift_byte & input)
-        {
-            printf("1");
-        }
-        else
-        {
-            printf("0");
-        }
-    }
-}
-
-void generate_key(unsigned char *key)
-{
-    int i;
-    for (i = 0; i < 8; i++)
-    {
-        key[i] = rand() % 255;
-    }
-}
-
-void print_key_set(key_set key_set)
-{
-    int i;
-    printf("K: \n");
-    for (i = 0; i < 8; i++)
-    {
-        printf("%02X : ", key_set.k[i]);
-        print_char_as_binary(key_set.k[i]);
-        printf("\n");
-    }
-    printf("\nC: \n");
-
-    for (i = 0; i < 4; i++)
-    {
-        printf("%02X : ", key_set.c[i]);
-        print_char_as_binary(key_set.c[i]);
-        printf("\n");
-    }
-    printf("\nD: \n");
-
-    for (i = 0; i < 4; i++)
-    {
-        printf("%02X : ", key_set.d[i]);
-        print_char_as_binary(key_set.d[i]);
-        printf("\n");
-    }
-    printf("\n");
-}
-
-void generate_sub_keys(unsigned char *main_key, key_set *key_sets)
-{
-    int i, j;
-    int shift_size;
-    unsigned char shift_byte, first_shift_bits, second_shift_bits, third_shift_bits, fourth_shift_bits;
-
-    for (i = 0; i < 8; i++)
-    {
-        key_sets[0].k[i] = 0;
-    }
-
-    for (i = 0; i < 56; i++)
-    {
-        shift_size = initial_key_permutaion[i];
-        shift_byte = 0x80 >> ((shift_size - 1) % 8);
-        shift_byte &= main_key[(shift_size - 1) / 8];
-        shift_byte <<= ((shift_size - 1) % 8);
-
-        key_sets[0].k[i / 8] |= (shift_byte >> i % 8);
-    }
-
-    for (i = 0; i < 3; i++)
-    {
-        key_sets[0].c[i] = key_sets[0].k[i];
-    }
-
-    key_sets[0].c[3] = key_sets[0].k[3] & 0xF0;
-
-    for (i = 0; i < 3; i++)
-    {
-        key_sets[0].d[i] = (key_sets[0].k[i + 3] & 0x0F) << 4;
-        key_sets[0].d[i] |= (key_sets[0].k[i + 4] & 0xF0) >> 4;
-    }
-
-    key_sets[0].d[3] = (key_sets[0].k[6] & 0x0F) << 4;
-
-    for (i = 1; i < 17; i++)
-    {
-        for (j = 0; j < 4; j++)
-        {
-            key_sets[i].c[j] = key_sets[i - 1].c[j];
-            key_sets[i].d[j] = key_sets[i - 1].d[j];
-        }
-
-        shift_size = key_shift_sizes[i];
-        if (shift_size == 1)
-        {
-            shift_byte = 0x80;
-        }
-        else
-        {
-            shift_byte = 0xC0;
-        }
-
-        // Process C
-        first_shift_bits = shift_byte & key_sets[i].c[0];
-        second_shift_bits = shift_byte & key_sets[i].c[1];
-        third_shift_bits = shift_byte & key_sets[i].c[2];
-        fourth_shift_bits = shift_byte & key_sets[i].c[3];
-
-        key_sets[i].c[0] <<= shift_size;
-        key_sets[i].c[0] |= (second_shift_bits >> (8 - shift_size));
-
-        key_sets[i].c[1] <<= shift_size;
-        key_sets[i].c[1] |= (third_shift_bits >> (8 - shift_size));
-
-        key_sets[i].c[2] <<= shift_size;
-        key_sets[i].c[2] |= (fourth_shift_bits >> (8 - shift_size));
-
-        key_sets[i].c[3] <<= shift_size;
-        key_sets[i].c[3] |= (first_shift_bits >> (4 - shift_size));
-
-        // Process D
-        first_shift_bits = shift_byte & key_sets[i].d[0];
-        second_shift_bits = shift_byte & key_sets[i].d[1];
-        third_shift_bits = shift_byte & key_sets[i].d[2];
-        fourth_shift_bits = shift_byte & key_sets[i].d[3];
-
-        key_sets[i].d[0] <<= shift_size;
-        key_sets[i].d[0] |= (second_shift_bits >> (8 - shift_size));
-
-        key_sets[i].d[1] <<= shift_size;
-        key_sets[i].d[1] |= (third_shift_bits >> (8 - shift_size));
-
-        key_sets[i].d[2] <<= shift_size;
-        key_sets[i].d[2] |= (fourth_shift_bits >> (8 - shift_size));
-
-        key_sets[i].d[3] <<= shift_size;
-        key_sets[i].d[3] |= (first_shift_bits >> (4 - shift_size));
-
-        for (j = 0; j < 48; j++)
-        {
-            shift_size = sub_key_permutation[j];
-            if (shift_size <= 28)
-            {
-                shift_byte = 0x80 >> ((shift_size - 1) % 8);
-                shift_byte &= key_sets[i].c[(shift_size - 1) / 8];
-                shift_byte <<= ((shift_size - 1) % 8);
-            }
-            else
-            {
-                shift_byte = 0x80 >> ((shift_size - 29) % 8);
-                shift_byte &= key_sets[i].d[(shift_size - 29) / 8];
-                shift_byte <<= ((shift_size - 29) % 8);
-            }
-
-            key_sets[i].k[j / 8] |= (shift_byte >> j % 8);
-        }
-    }
-}
-
-void process_message(unsigned char *message_piece, unsigned char *processed_piece, key_set *key_sets, int mode)
-{
-    int i, k;
-    int shift_size;
-    unsigned char shift_byte;
-
-    unsigned char initial_permutation[8];
-    memset(initial_permutation, 0, 8);
-    memset(processed_piece, 0, 8);
-
-    for (i = 0; i < 64; i++)
-    {
-        shift_size = initial_message_permutation[i];
-        shift_byte = 0x80 >> ((shift_size - 1) % 8);
-        shift_byte &= message_piece[(shift_size - 1) / 8];
-        shift_byte <<= ((shift_size - 1) % 8);
-
-        initial_permutation[i / 8] |= (shift_byte >> i % 8);
-    }
-
-    unsigned char l[4], r[4];
-    for (i = 0; i < 4; i++)
-    {
-        l[i] = initial_permutation[i];
-        r[i] = initial_permutation[i + 4];
-    }
-
-    unsigned char ln[4], rn[4], er[6], ser[4];
-
-    int key_index;
-    for (k = 1; k <= 16; k++)
-    {
-        memcpy(ln, r, 4);
-
-        memset(er, 0, 6);
-
-        for (i = 0; i < 48; i++)
-        {
-            shift_size = message_expansion[i];
-            shift_byte = 0x80 >> ((shift_size - 1) % 8);
-            shift_byte &= r[(shift_size - 1) / 8];
-            shift_byte <<= ((shift_size - 1) % 8);
-
-            er[i / 8] |= (shift_byte >> i % 8);
-        }
-
-        if (mode == DECRYPTION_MODE)
-        {
-            key_index = 17 - k;
-        }
-        else
-        {
-            key_index = k;
-        }
-
-        for (i = 0; i < 6; i++)
-        {
-            er[i] ^= key_sets[key_index].k[i];
-        }
-
-        unsigned char row, column;
-
-        for (i = 0; i < 4; i++)
-        {
-            ser[i] = 0;
-        }
-
-        // 0000 0000 0000 0000 0000 0000
-        // rccc crrc cccr rccc crrc cccr
-
-        // Byte 1
-        row = 0;
-        row |= ((er[0] & 0x80) >> 6);
-        row |= ((er[0] & 0x04) >> 2);
-
-        column = 0;
-        column |= ((er[0] & 0x78) >> 3);
-
-        ser[0] |= ((unsigned char)S1[row * 16 + column] << 4);
-
-        row = 0;
-        row |= (er[0] & 0x02);
-        row |= ((er[1] & 0x10) >> 4);
-
-        column = 0;
-        column |= ((er[0] & 0x01) << 3);
-        column |= ((er[1] & 0xE0) >> 5);
-
-        ser[0] |= (unsigned char)S2[row * 16 + column];
-
-        // Byte 2
-        row = 0;
-        row |= ((er[1] & 0x08) >> 2);
-        row |= ((er[2] & 0x40) >> 6);
-
-        column = 0;
-        column |= ((er[1] & 0x07) << 1);
-        column |= ((er[2] & 0x80) >> 7);
-
-        ser[1] |= ((unsigned char)S3[row * 16 + column] << 4);
-
-        row = 0;
-        row |= ((er[2] & 0x20) >> 4);
-        row |= (er[2] & 0x01);
-
-        column = 0;
-        column |= ((er[2] & 0x1E) >> 1);
-
-        ser[1] |= (unsigned char)S4[row * 16 + column];
-
-        // Byte 3
-        row = 0;
-        row |= ((er[3] & 0x80) >> 6);
-        row |= ((er[3] & 0x04) >> 2);
-
-        column = 0;
-        column |= ((er[3] & 0x78) >> 3);
-
-        ser[2] |= ((unsigned char)S5[row * 16 + column] << 4);
-
-        row = 0;
-        row |= (er[3] & 0x02);
-        row |= ((er[4] & 0x10) >> 4);
-
-        column = 0;
-        column |= ((er[3] & 0x01) << 3);
-        column |= ((er[4] & 0xE0) >> 5);
-
-        ser[2] |= (unsigned char)S6[row * 16 + column];
-
-        // Byte 4
-        row = 0;
-        row |= ((er[4] & 0x08) >> 2);
-        row |= ((er[5] & 0x40) >> 6);
-
-        column = 0;
-        column |= ((er[4] & 0x07) << 1);
-        column |= ((er[5] & 0x80) >> 7);
-
-        ser[3] |= ((unsigned char)S7[row * 16 + column] << 4);
-
-        row = 0;
-        row |= ((er[5] & 0x20) >> 4);
-        row |= (er[5] & 0x01);
-
-        column = 0;
-        column |= ((er[5] & 0x1E) >> 1);
-
-        ser[3] |= (unsigned char)S8[row * 16 + column];
-
-        for (i = 0; i < 4; i++)
-        {
-            rn[i] = 0;
-        }
-
-        for (i = 0; i < 32; i++)
-        {
-            shift_size = right_sub_message_permutation[i];
-            shift_byte = 0x80 >> ((shift_size - 1) % 8);
-            shift_byte &= ser[(shift_size - 1) / 8];
-            shift_byte <<= ((shift_size - 1) % 8);
-
-            rn[i / 8] |= (shift_byte >> i % 8);
-        }
-
-        for (i = 0; i < 4; i++)
-        {
-            rn[i] ^= l[i];
-        }
-
-        for (i = 0; i < 4; i++)
-        {
-            l[i] = ln[i];
-            r[i] = rn[i];
-        }
-    }
-
-    unsigned char pre_end_permutation[8];
-    for (i = 0; i < 4; i++)
-    {
-        pre_end_permutation[i] = r[i];
-        pre_end_permutation[4 + i] = l[i];
-    }
-
-    for (i = 0; i < 64; i++)
-    {
-        shift_size = final_message_permutation[i];
-        shift_byte = 0x80 >> ((shift_size - 1) % 8);
-        shift_byte &= pre_end_permutation[(shift_size - 1) / 8];
-        shift_byte <<= ((shift_size - 1) % 8);
-
-        processed_piece[i / 8] |= (shift_byte >> i % 8);
-    }
-}
 void dev_func()
 {
     // Key gen
-    unsigned char *des_key = (unsigned char *)malloc(8 * sizeof(char));
-    generate_key(des_key);
+    byte_t *des_key_ = ALLOC(byte_t, 8);
+    des_generate_key(des_key_);
     printf("Key: ");
     for (int i = 0; i < 8; i++)
     {
-        printf("%02X ", des_key[i]);
+        printf("%02X ", des_key_[i]);
     }
     printf("\n");
-    // Encrypt
     byte_t data[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
     size_t data_size = sizeof(data) / sizeof(data[0]);
     printf("Data: ");
-    for (int i = 0; i < data_size; i++)
-    {
-        printf("%02X ", data[i]);
-    }
-    printf("\n");
+    print_array_hex(data, data_size);
 
-    short int bytes_written, process_mode;
-    unsigned long block_count = 0, number_of_blocks;
-    unsigned char *data_block = (unsigned char *)malloc(8 * sizeof(char));
-    unsigned char *processed_block = (unsigned char *)malloc(8 * sizeof(char));
-    key_set *key_sets = (key_set *)malloc(17 * sizeof(key_set));
+    // Encrypt
+    byte_t *enc_data = ALLOC(byte_t, data_size);
+    size_t enc_size;
 
-    generate_sub_keys(des_key, key_sets);
-
-    byte_t *enc_data = (byte_t *)malloc(data_size * sizeof(byte_t));
-
-    number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
-
-    for (block_count = 0; block_count < number_of_blocks; block_count++)
-    {
-        bytes_written = 0;
-        for (int i = 0; i < 8; i++)
-        {
-            data_block[i] = 0;
-        }
-
-        for (int i = 0; i < 8; i++)
-        {
-            if (bytes_written < data_size)
-            {
-                data_block[i] = data[bytes_written];
-            }
-            else if (bytes_written == data_size)
-            {
-                data_block[i] = 0x80;
-            }
-            else
-            {
-                data_block[i] = 0;
-            }
-            bytes_written++;
-        }
-
-        process_message(data_block, processed_block, key_sets, ENCRYPTION_MODE);
-
-        for (int i = 0; i < 8; i++)
-        {
-            enc_data[block_count * 8 + i] = processed_block[i];
-        }
-    }
+    des_encrypt(data, data_size, enc_data, &enc_size, des_key_);
 
     printf("Encrypted data: ");
-    for (int i = 0; i < data_size; i++)
-    {
-        printf("%02X ", enc_data[i]);
-    }
-    printf("\n");
+    print_array_hex(enc_data, enc_size);
 
     // Decrypt
-    byte_t *dec_data = (byte_t *)malloc(data_size * sizeof(byte_t));
+    byte_t *dec_data = ALLOC(byte_t, data_size);
+    size_t dec_size;
 
-    for (block_count = 0; block_count < number_of_blocks; block_count++)
-    {
-        bytes_written = 0;
-        for (int i = 0; i < 8; i++)
-        {
-            data_block[i] = 0;
-        }
-
-        for (int i = 0; i < 8; i++)
-        {
-            if (bytes_written < data_size)
-            {
-                data_block[i] = enc_data[bytes_written];
-            }
-            else if (bytes_written == data_size)
-            {
-                data_block[i] = 0x80;
-            }
-            else
-            {
-                data_block[i] = 0;
-            }
-            bytes_written++;
-        }
-
-        process_message(data_block, processed_block, key_sets, DECRYPTION_MODE);
-
-        for (int i = 0; i < 8; i++)
-        {
-            dec_data[block_count * 8 + i] = processed_block[i];
-        }
-    }
+    des_decrypt(enc_data, enc_size, dec_data, &dec_size, des_key_);
 
     printf("Decrypted data: ");
-    for (int i = 0; i < data_size; i++)
-    {
-        printf("%02X ", dec_data[i]);
-    }
-    printf("\n");
+    print_array_hex(dec_data, dec_size);
 }
 
 // ===--- </DEV> ---============================================================
@@ -2633,7 +2783,7 @@ int main(int argc, const char **argv)
                 iter.set_prefix("RSA encoding: ");
 
                 if (log_quiet_lvl)
-                    iter.set_ostream(devnullstream);
+                    iter.set_ostream(devnull);
                 if (log_common_lvl)
                     std::cout << "Chunk size: " << chunk_size << " bytes" << std::endl;
                 for (auto i : iter)
@@ -2694,7 +2844,7 @@ int main(int argc, const char **argv)
                 iter.set_prefix("RSA decoding: ");
 
                 if (log_quiet_lvl)
-                    iter.set_ostream(devnullstream);
+                    iter.set_ostream(devnull);
                 if (log_common_lvl)
                     std::cout << "Chunk size: " << chunk_size << " bytes" << std::endl;
                 for (auto i : iter)
