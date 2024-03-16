@@ -76,45 +76,100 @@ int shuffle = 0; // Use byte shuffling, default: 0
     memcpy(dst, (vec).data(), (vec).size() * sizeof(T))
 
 // Colors
-#define C_RESET IME_ESC IME_RESET IME_ESC_END
-#define C_RED IME_ESC IME_RED IME_ESC_END
-#define C_GREEN IME_ESC IME_GREEN IME_ESC_END
-#define C_CYAN IME_ESC IME_RGB_COLOR(0, 200, 180) IME_ESC_END
-#define C_DIMM IME_ESC IME_BRIGHT_BLACK IME_ESC_END
+#define C_RESET \
+    IME_ESC     \
+    IME_RESET   \
+    IME_ESC_END
+#define C_RED \
+    IME_ESC   \
+    IME_RED   \
+    IME_ESC_END
+#define C_GREEN \
+    IME_ESC     \
+    IME_GREEN   \
+    IME_ESC_END
+#define C_CYAN                 \
+    IME_ESC                    \
+    IME_RGB_COLOR(0, 200, 180) \
+    IME_ESC_END
+#define C_DIMM       \
+    IME_ESC          \
+    IME_BRIGHT_BLACK \
+    IME_ESC_END
 
-#define C_HEADER IME_ESC IME_RGB_COLOR(255, 117, 24) IME_ESC_END
+#define C_HEADER                \
+    IME_ESC                     \
+    IME_RGB_COLOR(255, 117, 24) \
+    IME_ESC_END
 
-#define C_ERROR C_RED
+#define C_ERROR \
+    C_RED
 
 // Strings
-#define TESTS_STR IME_ESC IME_RGB_COLOR(255, 255, 100) IME_ESC_END \
+#define TESTS_STR                \
+    IME_ESC                      \
+    IME_RGB_COLOR(255, 255, 100) \
+    IME_ESC_END                  \
     "TESTS:" C_RESET "\n"
-#define INPUT_STR "\n" C_DIMM "Input:" C_RESET " "
+#define INPUT_STR \
+    "\n" C_DIMM   \
+    "Input:" C_RESET " "
 #define INVALID_INPUT_STR \
     C_RED                 \
     "Invalid input" C_RESET "\n"
-#define RSA_STR IME_ESC IME_RGB_COLOR(100, 100, 255) IME_ESC_END \
+
+#define RSA_STR                  \
+    IME_ESC                      \
+    IME_RGB_COLOR(100, 100, 255) \
+    IME_ESC_END                  \
     "RSA:" C_RESET "\n"
-#define ELGAMAL_STR IME_ESC IME_RGB_COLOR(100, 255, 100) IME_ESC_END \
+#define ELGAMAL_STR              \
+    IME_ESC                      \
+    IME_RGB_COLOR(100, 255, 100) \
+    IME_ESC_END                  \
     "ElGamal:" C_RESET "\n"
-#define ELGSIG_STR IME_ESC IME_RGB_COLOR(255, 85, 0) IME_ESC_END \
+#define ELGSIG_STR            \
+    IME_ESC                   \
+    IME_RGB_COLOR(255, 85, 0) \
+    IME_ESC_END               \
     "ElGamal Signature:" C_RESET "\n"
-#define DES_STR IME_ESC IME_RGB_COLOR(64, 130, 109) IME_ESC_END \
+#define DES_STR                 \
+    IME_ESC                     \
+    IME_RGB_COLOR(64, 130, 109) \
+    IME_ESC_END                 \
     "DES:" C_RESET "\n"
 
 #ifdef TESTS_VERBOSE
-#define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
+#define PASSED_STR \
+    IME_ESC        \
+    IME_GREEN      \
+    IME_ESC_END    \
     "===--> PASSED\n\n" C_RESET
-#define PASSED_TIME_FMT IME_ESC IME_GREEN IME_ESC_END \
+#define PASSED_TIME_FMT \
+    IME_ESC             \
+    IME_GREEN           \
+    IME_ESC_END         \
     "===--> PASSED: %.6fms\n\n" C_RESET
-#define FAILED_STR IME_ESC IME_RED IME_ESC_END \
+#define FAILED_STR \
+    IME_ESC        \
+    IME_RED        \
+    IME_ESC_END    \
     "===--> FAILED\n\n" C_RESET
 #else
-#define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
+#define PASSED_STR \
+    IME_ESC        \
+    IME_GREEN      \
+    IME_ESC_END    \
     "PASSED\n" C_RESET
-#define PASSED_TIME_FMT IME_ESC IME_GREEN IME_ESC_END \
+#define PASSED_TIME_FMT \
+    IME_ESC             \
+    IME_GREEN           \
+    IME_ESC_END         \
     "PASSED: %.6fms\n" C_RESET
-#define FAILED_STR IME_ESC IME_RED IME_ESC_END \
+#define FAILED_STR \
+    IME_ESC        \
+    IME_RED        \
+    IME_ESC_END    \
     "FAILED\n" C_RESET
 #endif // TESTS_VERBOSE
 
@@ -124,7 +179,7 @@ std::ofstream devnull("NUL");
 std::ofstream devnull("/dev/null");
 #endif
 
-// Main assert
+// Main assert, in a 'slay💅' style
 #define MASSERT(cond, msg)                           \
     if (!(cond))                                     \
     {                                                \
@@ -354,6 +409,7 @@ void fwrite_dec_modulo(int_t *data, size_t data_size,
 {
     size_t num_len = dec_num_len(N);
     FILE *file = fopen(file_name, "w");
+    MASSERT(file != NULL, "Can't open file for writing");
     for (size_t i = 0; i < data_size; i++)
     {
         for (size_t j = 0; j < num_len - dec_num_len(data[i]); j++)
@@ -377,6 +433,7 @@ void fwrite_hex_modulo(int_t *data, size_t data_size, int_t N,
 {
     size_t num_len = hex_num_len(N);
     FILE *file = fopen(file_name, "w");
+    MASSERT(file != NULL, "Can't open file for writing");
     for (size_t i = 0; i < data_size; i++)
     {
         fprintf(file, "%0*llX", (int)num_len, (uint64_t)data[i]);
@@ -391,7 +448,7 @@ void fwrite_hex_modulo(int_t *data, size_t data_size, int_t N,
 void fwrite_bin(const byte_t *bytes, size_t size, const char *file_name)
 {
     FILE *file = fopen(file_name, "wb");
-    assert(file != NULL && "Can't open file");
+    MASSERT(file != NULL, "Can't open file for writing");
     fwrite(bytes, 1, size, file);
     fclose(file);
 }
@@ -408,6 +465,7 @@ void swrite_dec_modulo(int_t *data, size_t data_size,
 {
     size_t num_len = dec_num_len(N);
     char *res = ALLOC(char, (data_size * num_len));
+    MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < data_size; i++)
     {
         for (size_t j = 0; j < num_len - dec_num_len(data[i]); j++)
@@ -433,6 +491,7 @@ void swrite_hex_modulo(int_t *data, size_t data_size, int_t N, char **str)
 {
     size_t num_len = hex_num_len(N);
     char *res = ALLOC(char, data_size *num_len);
+    MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < data_size; i++)
     {
         sprintf(res, "%0*llx", (int)num_len, (uint64_t)data[i]);
@@ -453,15 +512,18 @@ void fread_dec_modulo(int_t **data, size_t *data_size, int_t N,
                       const char *file_name)
 {
     FILE *file = fopen(file_name, "r");
+    MASSERT(file != NULL, "Can't open file for reading");
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
-    char *buffer = (char *)malloc(file_size);
+    char *buffer = ALLOC(char, file_size);
+    MASSERT(buffer != NULL, "Memory allocation failed");
     fread(buffer, 1, file_size, file);
     fclose(file);
     size_t num_len = dec_num_len(N);
     size_t num_count = file_size / num_len;
-    int_t *res = (int_t *)malloc(num_count * sizeof(int_t));
+    int_t *res = ALLOC(int_t, num_count);
+    MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < num_count; i++)
     {
         int_t num = 0;
@@ -473,7 +535,7 @@ void fread_dec_modulo(int_t **data, size_t *data_size, int_t N,
     }
     *data = res;
     *data_size = num_count;
-    free(buffer);
+    FREE(buffer);
 }
 
 /// @brief Read array of integers from a file as hexadecimal numbers with
@@ -532,12 +594,12 @@ void fread_hex_modulo(int_t **data, size_t *data_size, int_t N,
 void fread_bin(byte_t **bytes, size_t *size, const char *file_name)
 {
     FILE *file = fopen(file_name, "rb");
-    assert(file != NULL && "Can't open file");
+    MASSERT(file != NULL, "Can't open file for reading");
     fseek(file, 0, SEEK_END);
     *size = ftell(file);
     fseek(file, 0, SEEK_SET);
     *bytes = ALLOC(byte_t, *size);
-    assert(*bytes != NULL && "Memory allocation failed");
+    MASSERT(*bytes != NULL, "Memory allocation failed");
     fread(*bytes, 1, *size, file);
     fclose(file);
 }
@@ -555,6 +617,7 @@ void sread_dec_modulo(char *str, int_t **data, size_t *data_size, int_t N)
     size_t num_len = dec_num_len(N);
     size_t num_count = strlen(str) / num_len;
     int_t *res = ALLOC(int_t, num_count);
+    MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < num_count; i++)
     {
         int_t num = 0;
@@ -676,6 +739,7 @@ bool cmp_arrays(T *arr1, size_t arr1_size, T *arr2, size_t arr2_size)
 void convert_array_to_str(int_t *data, size_t data_size, char **str)
 {
     char *res = CALLOC(char, data_size);
+    MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < data_size; i++)
     {
         res[i] = (char)data[i];
@@ -693,6 +757,7 @@ void convert_str_to_array(char *str, int_t **data, size_t *data_size)
 {
     size_t str_len = strlen(str);
     int_t *res = ALLOC(int_t, str_len);
+    MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < str_len; i++)
     {
         res[i] = (int_t)str[i];
@@ -728,6 +793,7 @@ void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
     }
     *data_size = lst.size();
     SCRAP_VECTOR(*data, lst, int_t);
+    MASSERT(*data != NULL, "Memory allocation failed");
 }
 
 /// @brief Check if the array contains only ASCII characters
@@ -793,6 +859,7 @@ void convert_array_to_bytes_modulo(T *data, size_t data_size,
     size_t byte_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
     *new_size = data_size * byte_len;
     *new_data = ALLOC(byte_t, *new_size);
+    MASSERT(*new_data != NULL, "Memory allocation failed");
     for (size_t i = 0; i < data_size; i++)
     {
         for (size_t j = 0; j < byte_len; j++)
@@ -820,6 +887,7 @@ void convert_bytes_to_array_modulo(byte_t *data, size_t data_size,
     size_t num_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
     *new_size = data_size / num_len;
     *new_data = ALLOC(T, *new_size);
+    MASSERT(*new_data != NULL, "Memory allocation failed");
     for (size_t i = 0; i < *new_size; i++)
     {
         (*new_data)[i] = 0;
@@ -858,7 +926,7 @@ void read_bin_file_chunk(byte_t **bytes, size_t *size,
     }
     *size = end - start;
     *bytes = ALLOC(byte_t, *size);
-    assert(*bytes != NULL && "Memory allocation failed");
+    MASSERT(*bytes != NULL, "Memory allocation failed");
     fseek(file, start, SEEK_SET);
     fread(*bytes, 1, *size, file);
     fclose(file);
@@ -877,14 +945,7 @@ void write_bin_file_chunk(const byte_t *bytes, size_t size,
     {
         file = fopen(file_name, "wb");
     }
-    if (file == NULL)
-    {
-        if (!log_quiet_lvl)
-        {
-            std::cerr << "Can't open file: " << file_name << std::endl;
-        }
-        exit(1);
-    }
+    MASSERT(file != NULL, "Can't open file");
     fseek(file, start, SEEK_SET);
     fwrite(bytes, 1, size, file);
     fclose(file);
@@ -897,7 +958,7 @@ void write_bin_file_chunk(const byte_t *bytes, size_t size,
 size_t count_file_chunks(const char *file_name, size_t chunk_size)
 {
     FILE *file = fopen(file_name, "rb");
-    assert(file != NULL && "Can't open file");
+    MASSERT(file != NULL, "Can't open file");
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fclose(file);
@@ -910,7 +971,7 @@ size_t count_file_chunks(const char *file_name, size_t chunk_size)
 size_t file_size(const char *file_name)
 {
     FILE *file = fopen(file_name, "rb");
-    assert(file != NULL && "Can't open file");
+    MASSERT(file != NULL, "Can't open file");
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fclose(file);
@@ -922,7 +983,7 @@ void parse_hex_str(byte_t **data, size_t *data_size, const char *str)
     size_t str_len = strlen(str);
     *data_size = str_len / 2;
     *data = ALLOC(byte_t, *data_size);
-    assert(*data != NULL && "Memory allocation error");
+    MASSERT(*data != NULL, "Memory allocation failed");
     for (size_t i = 0; i < *data_size; i++)
     {
         unsigned int buffer;
@@ -1563,11 +1624,6 @@ bool __des_is_key_acceptable(byte_t *key)
     return !__des_is_key_weak(key) && !__des_is_key_semi_weak(key);
 }
 
-/*
-main_key - 64 bit key
-key_sets - array of (+1)16 key sets
-*/
-
 /// @brief Generate 16(+1) sub keys from the main key
 /// @param main_key 64 bit key
 /// @param key_sets array of (+1)16 key sets
@@ -1947,7 +2003,6 @@ void __des_decrypt_block(byte_t *data_block,
 /// @param key
 void des_key(byte_t *key)
 {
-    srand(time(0));
     do
     {
         int i;
@@ -2074,8 +2129,7 @@ void rsa_bench()
     int_t p = 257; // 257
     int_t q = 503; // 503
 
-    srand(time(0));
-    assert(is_prime(p) && is_prime(q) && "p and q must be prime");
+    MASSERT(is_prime(p) && is_prime(q), "p and q must be prime");
     int_t _N = rsa_N(p, q);
     int_t _t = rsa_t(p, q);
     auto time = GET_CURR_TIME;
@@ -2168,8 +2222,8 @@ void elg_bench()
     srand(time(0));
     int_t p = 503;
     int_t m = 20;
-    assert(is_prime(p) && "p must be prime");
-    assert(m <= p && "m must be less than p");
+    MASSERT(is_prime(p), "p must be prime");
+    MASSERT(m <= p, "m must be less than p");
 
     int pr_k_iter = 20000000;
     int pu_k_iter = 2000;
@@ -2257,7 +2311,6 @@ void elg_bench()
 void elgsig_bench()
 {
     std::cout << "ELGSIG BENCHMARK: ";
-    srand(time(0));
 
     int pr_k_iter = 20000000;
     int pu_k_iter = 2000;
@@ -2266,7 +2319,7 @@ void elgsig_bench()
     int_t p = 503;
     int_t m = 20;
 
-    assert(is_prime(p) && "p must be prime");
+    MASSERT(is_prime(p), "p must be prime");
 
     int_t key_x, key_y, key_g, a, b;
     auto total_start = GET_CURR_TIME;
@@ -2344,9 +2397,9 @@ void test_rsa_array()
 {
     int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     size_t data_size = sizeof(data) / sizeof(data[0]);
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
-    int_t *dec;
+    int_t *dec = NULL;
     size_t dec_size;
 
     int_t p = 13;
@@ -2383,17 +2436,17 @@ void test_rsa_array()
 #endif // TESTS_VERBOSE
     printf(res ? PASSED_STR : FAILED_STR);
 
-    free(cif);
-    free(dec);
+    FREE(cif);
+    FREE(dec);
 }
 
 void test_elg_array()
 {
     int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     size_t data_size = sizeof(data) / sizeof(data[0]);
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
-    int_t *dec;
+    int_t *dec = NULL;
     size_t dec_size;
 
     int_t p = 503;
@@ -2425,15 +2478,15 @@ void test_elg_array()
 #endif // TESTS_VERBOSE
     printf(res ? PASSED_STR : FAILED_STR);
 
-    free(cif);
-    free(dec);
+    FREE(cif);
+    FREE(dec);
 }
 
 void test_elgsig_array()
 {
     int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     size_t data_size = sizeof(data) / sizeof(data[0]);
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
 
     int_t p = 503;
@@ -2462,7 +2515,7 @@ void test_elgsig_array()
 #endif // TESTS_VERBOSE
     printf(res ? PASSED_STR : FAILED_STR);
 
-    free(cif);
+    FREE(cif);
 }
 
 void test_des()
@@ -2512,6 +2565,8 @@ void test_des()
 
     printf("Decrypted data: ");
     print_array_hex(dec_data, dec_size);
+
+    FREE(des_key_);
 }
 
 #endif // TESTS_ENABLED
@@ -2521,7 +2576,6 @@ void test_des()
 
 void main_case_rsa_genkey()
 {
-    srand(time(0));
     printf(RSA_STR);
     int_t cif_key;
     int_t dcif_key;
@@ -2567,7 +2621,7 @@ void main_case_rsa_encrypt()
     std::string input_str;
     std::cout << "Enter sequence to encrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
+    int_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2577,15 +2631,15 @@ void main_case_rsa_encrypt()
     {
         parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
     }
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
     rsa_encrypt(data, data_size, &cif, &cif_size, cif_key, N);
     char *str_buf;
     swrite_dec_modulo(cif, cif_size, N, &str_buf);
     std::cout << C_CYAN "Encrypted sequence:" C_RESET " \n"
               << str_buf << std::endl;
-    free(data);
-    free(cif);
+    FREE(data);
+    FREE(cif);
 }
 
 void main_case_rsa_decrypt()
@@ -2600,24 +2654,24 @@ void main_case_rsa_decrypt()
     std::string input_str;
     std::cout << "Enter sequence to decrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
+    int_t *data = NULL;
     size_t data_size;
     sread_dec_modulo((char *)input_str.c_str(), &data, &data_size, N);
-    int_t *dcif;
+    int_t *dcif = NULL;
     size_t dcif_size;
     rsa_decrypt(data, data_size, &dcif, &dcif_size, prvt_key, N);
     std::cout << C_CYAN "Decrypted sequence (DEC):" C_RESET " \n";
     print_array(dcif, dcif_size);
     if (is_array_ascii(dcif, dcif_size))
     {
-        char *str_buf;
+        char *str_buf = NULL;
         convert_array_to_str(dcif, dcif_size, &str_buf);
         std::cout << C_CYAN "Decrypted sequence (ASCII):" C_RESET " \n"
                   << str_buf << std::endl;
-        free(str_buf);
+        FREE(str_buf);
     }
-    free(data);
-    free(dcif);
+    FREE(data);
+    FREE(dcif);
 }
 
 void main_case_elg_genkey()
@@ -2656,7 +2710,7 @@ void main_case_elg_encrypt()
     std::string input_str;
     std::cout << "Enter sequence to encrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
+    int_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2666,15 +2720,15 @@ void main_case_elg_encrypt()
     {
         parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
     }
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
     elg_encrypt(data, data_size, &cif, &cif_size, key_y, key_g, p);
-    char *str_buf;
+    char *str_buf = NULL;
     swrite_dec_modulo(cif, cif_size, p, &str_buf);
     std::cout << C_CYAN "Encrypted sequence:" C_RESET " \n"
               << str_buf << std::endl;
-    free(data);
-    free(cif);
+    FREE(data);
+    FREE(cif);
 }
 
 void main_case_elg_decrypt()
@@ -2689,24 +2743,24 @@ void main_case_elg_decrypt()
     std::string input_str;
     std::cout << "Enter sequence to decrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
+    int_t *data = NULL;
     size_t data_size;
     sread_dec_modulo((char *)input_str.c_str(), &data, &data_size, p);
-    int_t *dcif;
+    int_t *dcif = NULL;
     size_t dcif_size;
     elg_dcif(data, data_size, &dcif, &dcif_size, prvt_key, p);
     std::cout << C_CYAN "Decrypted sequence (DEC):" C_RESET " \n";
     print_array(dcif, dcif_size);
     if (is_array_ascii(dcif, dcif_size))
     {
-        char *str_buf;
+        char *str_buf = NULL;
         convert_array_to_str(dcif, dcif_size, &str_buf);
         std::cout << C_CYAN "Decrypted sequence (ASCII):" C_RESET " \n"
                   << str_buf << std::endl;
-        free(str_buf);
+        FREE(str_buf);
     }
-    free(data);
-    free(dcif);
+    FREE(data);
+    FREE(dcif);
 }
 
 void main_case_elgsig_genkey()
@@ -2745,7 +2799,7 @@ void main_case_elgsig_sign()
     std::string input_str;
     std::cout << "Enter sequence to sign:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
+    int_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2755,15 +2809,15 @@ void main_case_elgsig_sign()
     {
         parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
     }
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
     elgsig_sign(data, data_size, &cif, &cif_size, key_x, key_g, p);
-    char *str_buf;
+    char *str_buf = NULL;
     swrite_dec_modulo(cif, cif_size, p, &str_buf);
     std::cout << C_CYAN "Signature:" C_RESET "\n"
               << str_buf << std::endl;
-    free(data);
-    free(cif);
+    FREE(data);
+    FREE(cif);
 }
 
 void main_case_elgsig_check()
@@ -2781,7 +2835,7 @@ void main_case_elgsig_check()
     std::string input_str;
     std::cout << "Enter sequence to check:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
+    int_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2793,15 +2847,15 @@ void main_case_elgsig_check()
     }
     std::cout << "Enter signature:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *cif;
+    int_t *cif = NULL;
     size_t cif_size;
     sread_dec_modulo((char *)input_str.c_str(), &cif, &cif_size, p);
     bool res = elgsig_check(cif, cif_size, key_y, key_g, p, data, data_size);
     std::cout << (res ? C_GREEN "Signature is valid" C_RESET " "
                       : C_RED "Signature is NOT valid" C_RESET " ")
               << std::endl;
-    free(data);
-    free(cif);
+    FREE(data);
+    FREE(cif);
 }
 
 void main_case_des_genkey()
@@ -3269,19 +3323,19 @@ int main(int argc, const char **argv)
         size_t chunk_count;
 
         // Common data arrays.
-        byte_t *data;
+        byte_t *data = NULL;
         size_t data_size;
 
-        int_t *data_int;
+        int_t *data_int = NULL;
         size_t data_int_size;
 
-        int_t *cif;
+        int_t *cif = NULL;
         size_t cif_size;
 
-        byte_t *dcif;
+        byte_t *dcif = NULL;
         size_t dcif_size;
 
-        byte_t *bytes;
+        byte_t *bytes = NULL;
         size_t bytes_size;
 
         if (is_str_eq("rsa", mode))
@@ -3290,12 +3344,12 @@ int main(int argc, const char **argv)
             {
                 if (log_verbose_lvl)
                     printf("RSA encrypte\n");
-                assert(file != NULL && "File path is required");
-                assert(ring != 0 && "N key is required");
-                assert(key != NULL && "Key is required");
+                MASSERT(file != NULL, "File path is required");
+                MASSERT(ring != NULL, "N key is required");
+                MASSERT(key != NULL, "Key is required");
                 if (output == NULL)
                 {
-                    output = (char *)malloc(strlen(file) + 6);
+                    output = ALLOC(char, strlen(file) + 6);
                     strcpy((char *)output, file);
                     strcat((char *)output, ".ciph");
                 }
@@ -3344,17 +3398,17 @@ int main(int argc, const char **argv)
                         printf("Written: ");
                         print_array_hex(bytes, bytes_size);
                     }
-                    free(data);
-                    free(cif);
-                    free(bytes);
+                    FREE(data);
+                    FREE(cif);
+                    FREE(bytes);
                 }
                 std::cout << std::endl;
             }
             else if (decrypt)
             {
-                assert(file != NULL && "File path is required");
-                assert(ring != 0 && "N key is required");
-                assert(key != NULL && "Key is required");
+                MASSERT(file != NULL, "File path is required");
+                MASSERT(ring != NULL, "N key is required");
+                MASSERT(key != NULL, "Key is required");
                 if (file != NULL && strlen(file) > 5)
                 {
                     if (strcmp(file + strlen(file) - 5, ".ciph") != 0)
@@ -3365,7 +3419,7 @@ int main(int argc, const char **argv)
                 }
                 if (output == NULL)
                 {
-                    output = (char *)malloc(strlen(file) - 5);
+                    output = ALLOC(char, strlen(file) - 5);
                     strncpy((char *)output, file, strlen(file) - 5);
                     ((char *)output)[strlen(file) - 5] = '\0';
                 }
@@ -3427,9 +3481,9 @@ int main(int argc, const char **argv)
                         printf("Written: ");
                         print_array_hex(dcif, dcif_size);
                     }
-                    free(data);
-                    free(data_int);
-                    free(dcif);
+                    FREE(data);
+                    FREE(data_int);
+                    FREE(dcif);
                 }
                 free((void *)output);
             }
