@@ -62,11 +62,6 @@ int log_shutup_lvl = 0;  // No logs
 #define GET_TIME_DIFF(start, end) \
     std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()
 
-// Preferrable allocators
-#define ALLOC(T, size) ((T *)malloc((size) * sizeof(T)))
-#define CALLOC(T, size) ((T *)calloc((size), sizeof(T)))
-#define REALLOC(T, ptr, size) ((T *)realloc(ptr, (size) * sizeof(T)))
-
 // Common integer type (signed)
 #define int_t int
 
@@ -84,7 +79,10 @@ int log_shutup_lvl = 0;  // No logs
 #define C_GREEN IME_ESC IME_GREEN IME_ESC_END
 #define C_CYAN IME_ESC IME_RGB_COLOR(0, 200, 180) IME_ESC_END
 #define C_DIMM IME_ESC IME_BRIGHT_BLACK IME_ESC_END
+
 #define C_HEADER IME_ESC IME_RGB_COLOR(255, 117, 24) IME_ESC_END
+
+#define C_ERROR C_RED
 
 // Strings
 #define TESTS_STR IME_ESC IME_RGB_COLOR(255, 255, 100) IME_ESC_END \
@@ -99,6 +97,8 @@ int log_shutup_lvl = 0;  // No logs
     "ElGamal:" C_RESET "\n"
 #define ELGSIG_STR IME_ESC IME_RGB_COLOR(255, 85, 0) IME_ESC_END \
     "ElGamal Signature:" C_RESET "\n"
+#define DES_STR IME_ESC IME_RGB_COLOR(64, 130, 109) IME_ESC_END \
+    "DES:" C_RESET "\n"
 
 #ifdef TESTS_VERBOSE
 #define PASSED_STR IME_ESC IME_GREEN IME_ESC_END \
@@ -121,6 +121,27 @@ std::ofstream devnull("NUL");
 #else
 std::ofstream devnull("/dev/null");
 #endif
+
+#define MASSERT(cond, msg)                           \
+    if (!(cond))                                     \
+    {                                                \
+        printf(C_ERROR);                             \
+        printf("[ASSERTION FAILED] <%s:%s:%d> %s\n", \
+               __FILE__, __func__, __LINE__, msg);   \
+        printf(C_RESET " ");                         \
+        exit(1);                                     \
+    }
+
+// Preferrable allocators
+#define ALLOC(T, size) ((T *)malloc((size) * sizeof(T)))
+#define CALLOC(T, size) ((T *)calloc((size), sizeof(T)))
+#define REALLOC(T, ptr, size) ((T *)realloc(ptr, (size) * sizeof(T)))
+#define FREE(ptr)    \
+    if (ptr != NULL) \
+    {                \
+        free(ptr);   \
+        ptr = NULL;  \
+    }
 
 // ===--- ESSENTIALS ---========================================================
 #define __ESSENTIALS
@@ -225,20 +246,25 @@ T min(T a, T b)
     return a < b ? a : b;
 }
 
+bool str_eq(const char *str1, const char *str2)
+{
+    return strcmp(str1, str2) == 0;
+}
+
 // ===--- RSA CIPHER ---========================================================
 #define __RSA_CIPHER
 
 int_t rsa_N(int_t p, int_t q)
 {
-    assert(is_prime(p) && "p must be prime");
-    assert(is_prime(q) && "q must be prime");
+    MASSERT(is_prime(p), "p must be prime");
+    MASSERT(is_prime(q), "q must be prime");
     return p * q;
 }
 
 int_t rsa_t(int_t p, int_t q)
 {
-    assert(is_prime(p) && "p must be prime");
-    assert(is_prime(q) && "q must be prime");
+    MASSERT(is_prime(p), "p must be prime");
+    MASSERT(is_prime(q), "q must be prime");
     return (p - 1) * (q - 1);
 }
 
@@ -285,6 +311,8 @@ void rsa_cif(int_t *data, size_t data_size,
              int_t key, int_t N)
 {
     int_t *res = ALLOC(int_t, 2 * data_size);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     for (size_t i = 0; i < data_size; i++)
     {
         res[i] = rsa_cif(data[i], key, N);
@@ -301,6 +329,8 @@ void rsa_cif(byte_t *data, size_t data_size,
              int_t key, int_t N)
 {
     int_t *res = ALLOC(int_t, 2 * data_size);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     for (size_t i = 0; i < data_size; i++)
     {
         res[i] = rsa_cif((int_t)data[i], key, N);
@@ -322,6 +352,8 @@ void rsa_dcif(int_t *cif, size_t cif_size,
               int_t key, int_t N)
 {
     int_t *res = ALLOC(int_t, cif_size);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     for (size_t i = 0; i < cif_size; i++)
     {
         res[i] = rsa_dcif(cif[i], key, N);
@@ -338,6 +370,8 @@ void rsa_dcif(int_t *cif, size_t cif_size,
               int_t key, int_t N)
 {
     byte_t *res = ALLOC(byte_t, cif_size);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     for (size_t i = 0; i < cif_size; i++)
     {
         res[i] = rsa_dcif(cif[i], key, N);
@@ -385,6 +419,8 @@ void elg_cif(int_t *data, size_t data_size,
              int_t key_y, int_t key_g, int_t p)
 {
     int_t *res = ALLOC(int_t, data_size << 1);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     int_t a, b;
     for (size_t i = 0; i < data_size; i++)
     {
@@ -409,6 +445,8 @@ void elg_dcif(int_t *cif, size_t cif_size,
               int_t key_x, int_t p)
 {
     int_t *res = ALLOC(int_t, cif_size >> 1);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     for (size_t i = 0; i < cif_size; i += 2)
     {
         res[i >> 1] = elg_dcif(cif[i], cif[i + 1], key_x, p);
@@ -456,6 +494,8 @@ void elgsig_make(int_t *data, size_t data_size,
                  int_t key_y, int_t key_g, int_t p)
 {
     int_t *res = ALLOC(int_t, data_size << 1);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     int_t a, b;
     for (size_t i = 0; i < data_size; i++)
     {
@@ -498,12 +538,12 @@ bool elgsig_check(int_t *cif, size_t cif_size,
 #define DES_ENCRYPTION_MODE 1
 #define DES_DECRYPTION_MODE 0
 
-typedef struct des_key_sets
+typedef struct
 {
     byte_t k[8];
     byte_t c[4];
     byte_t d[4];
-} des_key_sets;
+} des_key_set;
 
 byte_t __des_initial_key_permutaion[] = {0x39, 0x31, 0x29, 0x21,
                                          0x19, 0x11, 0x09, 0x01,
@@ -715,7 +755,7 @@ bool __des_is_key_acceptable(byte_t *key)
 main_key - 64 bit key
 key_sets - array of (+1)16 key sets
 */
-void __des_generate_sub_keys(byte_t *main_key, des_key_sets *key_sets)
+void __des_generate_sub_keys(byte_t *main_key, des_key_set *key_sets)
 {
     int i, j;
     int shift_size;
@@ -729,6 +769,14 @@ void __des_generate_sub_keys(byte_t *main_key, des_key_sets *key_sets)
     for (i = 0; i < 8; i++)
     {
         key_sets[0].k[i] = 0;
+    }
+
+    for (j = 1; j < 17; j++)
+    {
+        for (i = 0; i < 8; i++)
+        {
+            key_sets[j].k[i] = 0;
+        }
     }
 
     // Generate first key set's k
@@ -847,7 +895,7 @@ mode - 1 for encryption, 0 for decryption
 */
 void __des_process_data_block(byte_t *data_block,
                               byte_t *processed_block,
-                              des_key_sets *key_sets,
+                              des_key_set *key_sets,
                               int mode)
 {
     int i, k;
@@ -1054,16 +1102,22 @@ void __des_process_data_block(byte_t *data_block,
 
 void __des_encrypt_block(byte_t *data_block,
                          byte_t *processed_block,
-                         des_key_sets *key_sets)
+                         des_key_set *key_sets)
 {
-    __des_process_data_block(data_block, processed_block, key_sets, DES_ENCRYPTION_MODE);
+    __des_process_data_block(data_block,
+                             processed_block,
+                             key_sets,
+                             DES_ENCRYPTION_MODE);
 }
 
 void __des_decrypt_block(byte_t *data_block,
                          byte_t *processed_block,
-                         des_key_sets *key_sets)
+                         des_key_set *key_sets)
 {
-    __des_process_data_block(data_block, processed_block, key_sets, DES_DECRYPTION_MODE);
+    __des_process_data_block(data_block,
+                             processed_block,
+                             key_sets,
+                             DES_DECRYPTION_MODE);
 }
 
 void des_generate_key(byte_t *key)
@@ -1079,43 +1133,39 @@ void des_generate_key(byte_t *key)
     } while (!__des_is_key_acceptable(key));
 }
 
+template <typename T>
+void print_array_hex_line(T *data, size_t data_size);
+
 void des_encrypt(byte_t *data, size_t data_size,
                  byte_t *enc_data, size_t *enc_data_size,
                  byte_t *des_key)
 {
-    short int bytes_written;
-    unsigned long block_count = 0, number_of_blocks;
+    MASSERT(data != NULL, "data cannot be NULL");
+    MASSERT(data_size > 0, "data_size must be greater than 0");
+    MASSERT(data_size % 8 == 0, "data_size must be a multiple of 8");
+    MASSERT(enc_data != NULL, "enc_data cannot be NULL");
+    MASSERT(des_key != NULL, "des_key cannot be NULL");
+
     byte_t *data_block = ALLOC(byte_t, 8);
+    MASSERT(data_block != NULL, "Memory allocation failed");
+
     byte_t *processed_block = ALLOC(byte_t, 8);
-    des_key_sets *key_sets = ALLOC(des_key_sets, 17);
+    MASSERT(processed_block != NULL, "Memory allocation failed");
+
+    des_key_set *key_sets = ALLOC(des_key_set, 17);
+    MASSERT(key_sets != NULL, "Memory allocation failed");
 
     __des_generate_sub_keys(des_key, key_sets);
 
-    number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
+    unsigned long number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
 
-    for (block_count = 0; block_count < number_of_blocks; block_count++)
+    for (unsigned long block_count = 0;
+         block_count < number_of_blocks;
+         block_count++)
     {
-        bytes_written = 0;
         for (int i = 0; i < 8; i++)
         {
-            data_block[i] = 0;
-        }
-
-        for (int i = 0; i < 8; i++)
-        {
-            if ((size_t)bytes_written < data_size)
-            {
-                data_block[i] = data[block_count * 8 + bytes_written];
-            }
-            else if ((size_t)bytes_written == data_size)
-            {
-                data_block[i] = 0x80;
-            }
-            else
-            {
-                data_block[i] = 0;
-            }
-            bytes_written++;
+            data_block[i] = data[block_count * 8 + i];
         }
 
         __des_encrypt_block(data_block, processed_block, key_sets);
@@ -1127,48 +1177,41 @@ void des_encrypt(byte_t *data, size_t data_size,
     }
 
     *enc_data_size = data_size;
-    free(data_block);
-    free(processed_block);
-    free(key_sets);
+    FREE(data_block);
+    FREE(processed_block);
+    FREE(key_sets);
 }
 
 void des_decrypt(byte_t *data, size_t data_size,
                  byte_t *dec_data, size_t *dec_data_size,
                  byte_t *des_key)
 {
-    short int bytes_written;
-    unsigned long block_count = 0, number_of_blocks;
+    MASSERT(data != NULL, "data cannot be NULL");
+    MASSERT(data_size > 0, "data_size must be greater than 0");
+    MASSERT(data_size % 8 == 0, "data_size must be a multiple of 8");
+    MASSERT(dec_data != NULL, "dec_data cannot be NULL");
+    MASSERT(des_key != NULL, "des_key cannot be NULL");
+
     byte_t *data_block = ALLOC(byte_t, 8);
+    MASSERT(data_block != NULL, "Memory allocation failed");
+
     byte_t *processed_block = ALLOC(byte_t, 8);
-    des_key_sets *key_sets = ALLOC(des_key_sets, 17);
+    MASSERT(processed_block != NULL, "Memory allocation failed");
+
+    des_key_set *key_sets = ALLOC(des_key_set, 17);
+    MASSERT(key_sets != NULL, "Memory allocation failed");
 
     __des_generate_sub_keys(des_key, key_sets);
 
-    number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
+    unsigned long number_of_blocks = data_size / 8 + (data_size % 8 ? 1 : 0);
 
-    for (block_count = 0; block_count < number_of_blocks; block_count++)
+    for (unsigned long block_count = 0;
+         block_count < number_of_blocks;
+         block_count++)
     {
-        bytes_written = 0;
         for (int i = 0; i < 8; i++)
         {
-            data_block[i] = 0;
-        }
-
-        for (int i = 0; i < 8; i++)
-        {
-            if ((size_t)bytes_written < data_size)
-            {
-                data_block[i] = data[block_count * 8 + bytes_written];
-            }
-            else if ((size_t)bytes_written == data_size)
-            {
-                data_block[i] = 0x80;
-            }
-            else
-            {
-                data_block[i] = 0;
-            }
-            bytes_written++;
+            data_block[i] = data[block_count * 8 + i];
         }
 
         __des_decrypt_block(data_block, processed_block, key_sets);
@@ -1180,9 +1223,9 @@ void des_decrypt(byte_t *data, size_t data_size,
     }
 
     *dec_data_size = data_size;
-    free(data_block);
-    free(processed_block);
-    free(key_sets);
+    FREE(data_block);
+    FREE(processed_block);
+    FREE(key_sets);
 }
 
 // ===--- BENCHMARKS ---========================================================
@@ -1536,7 +1579,7 @@ void dump_data_to_hex_str(int_t *data, size_t data_size, int_t N, char **str)
     char *res = ALLOC(char, data_size *num_len);
     for (size_t i = 0; i < data_size; i++)
     {
-        sprintf(res, "%0*X", (int)num_len, data[i]);
+        sprintf(res, "%0*x", (int)num_len, data[i]);
         res += num_len;
     }
     res -= data_size * num_len;
@@ -1587,15 +1630,23 @@ void read_dump_from_hex_file(int_t **data, size_t *data_size, int_t N,
                              const char *file_name)
 {
     FILE *file = fopen(file_name, "r");
+    MASSERT(file != NULL, "Can't open file for reading");
+
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
-    char *buffer = (char *)malloc(file_size);
+
+    char *buffer = ALLOC(char, file_size);
+    MASSERT(buffer != NULL, "Memory allocation failed");
+
     fread(buffer, 1, file_size, file);
     fclose(file);
     size_t num_len = hex_num_len(N);
     size_t num_count = file_size / num_len;
-    int_t *res = (int_t *)malloc(num_count * sizeof(int_t));
+
+    int_t *res = ALLOC(int_t, num_count);
+    MASSERT(res != NULL, "Memory allocation failed");
+
     for (size_t i = 0; i < num_count; i++)
     {
         int_t num = 0;
@@ -1613,7 +1664,7 @@ void read_dump_from_hex_file(int_t **data, size_t *data_size, int_t N,
     }
     *data = res;
     *data_size = num_count;
-    free(buffer);
+    FREE(buffer);
 }
 
 /*
@@ -1643,6 +1694,15 @@ void print_array(T *data, size_t data_size)
     printf("%u}\n", data[data_size - 1]);
 }
 
+void print_array_ascii(char *data, size_t data_size)
+{
+    for (size_t i = 0; i < data_size; i++)
+    {
+        printf("%c", data[i]);
+    }
+    printf("\n");
+}
+
 template <typename T>
 void print_array_hex(T *data, size_t data_size)
 {
@@ -1652,6 +1712,15 @@ void print_array_hex(T *data, size_t data_size)
         printf("0x%0*X, ", (int)sizeof(T) * 2, data[i]);
     }
     printf("0x%0*X}\n", (int)sizeof(T) * 2, data[data_size - 1]);
+}
+
+template <typename T>
+void print_array_hex_line(T *data, size_t data_size)
+{
+    for (size_t i = 0; i < data_size; i++)
+    {
+        printf("%0*x", (int)sizeof(T) * 2, data[i]);
+    }
 }
 
 void print_byte_bin(byte_t byte)
@@ -1940,20 +2009,29 @@ void test_elgsig_array()
 
 void main_case_rsa_genkey()
 {
+    srand(time(0));
     printf(RSA_STR);
     int_t cif_key;
     int_t dcif_key;
-    int_t *cif;
-    size_t cif_size;
-    int_t *data;
-    size_t data_size;
-    char *str_buf;
     printf("First prime number (p): ");
     int_t p;
     std::cin >> p;
+    if (p == 0)
+    {
+        while (!is_prime(p))
+            p = rand() % 500 + 500;
+        printf("Random prime number (p): %d\n", p);
+    }
     printf("Second prime number (q): ");
     int_t q;
     std::cin >> q;
+    if (q == 0)
+    {
+        while (!is_prime(q))
+            q = rand() % 500 + 500;
+        printf("Random prime number (q): %d\n", q);
+    }
+
     int_t N = rsa_N(p, q);
     int_t t = rsa_t(p, q);
     cif_key = rsa_cif_key(t);
@@ -1962,26 +2040,9 @@ void main_case_rsa_genkey()
     std::cout << "t: " << t << std::endl;
     std::cout << "Public key: " << cif_key << std::endl;
     std::cout << "Private key: " << dcif_key << std::endl;
-    std::string input_str;
-    std::cout << "Enter sequence to encode: " << std::endl;
-    std::getline(std::cin >> std::ws, input_str);
-    if (is_str_contains_alpha((char *)input_str.c_str()))
-    {
-        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
-    }
-    else
-    {
-        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
-    }
-    rsa_cif(data, data_size, &cif, &cif_size, cif_key, N);
-    dump_data_to_dec_str(cif, cif_size, N, &str_buf);
-    std::cout << C_CYAN "Encoded sequence:" C_RESET " \n"
-              << str_buf << std::endl;
-    free(data);
-    free(cif);
 }
 
-void main_case_rsa_setkey()
+void main_case_rsa_encode()
 {
     printf(RSA_STR);
     printf("Public key: ");
@@ -2053,33 +2114,17 @@ void main_case_elg_genkey()
     int_t p;
     printf("N: ");
     std::cin >> p;
+    if (p == 0)
+    {
+        while (!is_prime(p))
+            p = rand() % 500 + 500;
+        printf("Random prime number (p): %d\n", p);
+    }
     elg_make_private_key(&key_x, p);
     elg_make_public_key(&key_y, &key_g, key_x, p);
     std::cout << "Private key (x): " << key_x << std::endl;
     std::cout << "Public key (y): " << key_y << std::endl;
     std::cout << "Generator (g): " << key_g << std::endl;
-    std::string input_str;
-    std::cout << "Enter sequence to encode:\n";
-    std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
-    size_t data_size;
-    if (is_str_contains_alpha((char *)input_str.c_str()))
-    {
-        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
-    }
-    else
-    {
-        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
-    }
-    int_t *cif;
-    size_t cif_size;
-    elg_cif(data, data_size, &cif, &cif_size, key_y, key_g, p);
-    char *str_buf;
-    dump_data_to_dec_str(cif, cif_size, p, &str_buf);
-    std::cout << C_CYAN "Encoded sequence:" C_RESET " \n"
-              << str_buf << std::endl;
-    free(data);
-    free(cif);
 }
 
 void main_case_elg_setkey()
@@ -2157,33 +2202,17 @@ void main_case_elgsig_genkey()
     int_t p;
     printf("N: ");
     std::cin >> p;
+    if (p == 0)
+    {
+        while (!is_prime(p))
+            p = rand() % 500 + 500;
+        printf("Random prime number (p): %d\n", p);
+    }
     elg_make_private_key(&key_x, p);
     elg_make_public_key(&key_y, &key_g, key_x, p);
     std::cout << "Private key (x): " << key_x << std::endl;
     std::cout << "Public key (y): " << key_y << std::endl;
     std::cout << "Generator (g): " << key_g << std::endl;
-    std::string input_str;
-    std::cout << "Enter sequence to sign:\n";
-    std::getline(std::cin >> std::ws, input_str);
-    int_t *data;
-    size_t data_size;
-    if (is_str_contains_alpha((char *)input_str.c_str()))
-    {
-        acsii_to_array((char *)input_str.c_str(), &data, &data_size);
-    }
-    else
-    {
-        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
-    }
-    int_t *cif;
-    size_t cif_size;
-    elgsig_make(data, data_size, &cif, &cif_size, key_x, key_g, p);
-    char *str_buf;
-    dump_data_to_dec_str(cif, cif_size, p, &str_buf);
-    std::cout << C_CYAN "Signature:" C_RESET "\n"
-              << str_buf << std::endl;
-    free(data);
-    free(cif);
 }
 
 void main_case_elgsig_setkey()
@@ -2260,186 +2289,392 @@ void main_case_elgsig_check()
     free(cif);
 }
 
+void main_case_des_genkey()
+{
+    printf(DES_STR);
+    byte_t *des_key_ = ALLOC(byte_t, 8);
+    des_generate_key(des_key_);
+    printf("Key: ");
+    for (int i = 0; i < 8; i++)
+    {
+        printf("%02x", des_key_[i]);
+    }
+    printf("\n");
+}
+
+void parse_hex_str(byte_t **data, size_t *data_size, const char *str)
+{
+    size_t str_len = strlen(str);
+    *data_size = str_len / 2;
+    *data = ALLOC(byte_t, *data_size);
+    assert(*data != NULL && "Memory allocation error");
+    for (size_t i = 0; i < *data_size; i++)
+    {
+        unsigned int buffer;
+        sscanf(&str[i * 2], "%02x", &buffer);
+        (*data)[i] = buffer;
+    }
+}
+
+/*
+!! Allocates memory for the result
+*/
+template <typename T>
+void to_byte_array(T *data, size_t data_size,
+                   byte_t **barray, size_t *barray_size)
+{
+    *barray_size = data_size * sizeof(T);
+    *barray = ALLOC(byte_t, *barray_size);
+    assert(*barray != NULL && "Memory allocation error");
+    memcpy(*barray, data, *barray_size);
+}
+
+void padd_data_to_chunksize(byte_t **data, size_t *data_size, size_t cap)
+{
+    size_t padd_size = cap - *data_size % cap;
+    if (padd_size == cap)
+    {
+        padd_size = 0;
+    }
+    std::cout << "Padd size: " << padd_size << std::endl;
+    *data = REALLOC(byte_t, *data, *data_size + padd_size);
+    assert(*data != NULL && "Memory allocation error");
+    memset(*data + *data_size, 0, padd_size);
+    *data_size += padd_size;
+}
+
+void dev_func();
+
+void main_case_des_encode()
+{
+    printf(DES_STR);
+    printf("Key: ");
+    std::string key_str;
+    std::cin >> key_str;
+    byte_t *key = NULL;
+    size_t key_size;
+    parse_hex_str(&key, &key_size, (char *)key_str.c_str());
+    printf("Enter sequence to encode:\n");
+    std::string input_str;
+    std::getline(std::cin >> std::ws, input_str);
+
+    int_t *data = NULL;
+    size_t data_size;
+    byte_t *bdata = NULL;
+    size_t bdata_size;
+    if (is_str_contains_alpha((char *)input_str.c_str()))
+    {
+        bdata = ALLOC(byte_t, input_str.size());
+        memcpy(bdata, input_str.c_str(), input_str.size());
+        bdata_size = input_str.size();
+    }
+    else
+    {
+        parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
+        to_byte_array(data, data_size, &bdata, &bdata_size);
+    }
+    padd_data_to_chunksize(&bdata, &bdata_size, 8);
+
+    printf("bData: ");
+    print_array_hex(bdata, bdata_size);
+    printf("Key: ");
+    print_array_hex(key, key_size);
+
+    size_t cif_size;
+    byte_t *cif = ALLOC(byte_t, bdata_size);
+    // TODO: remake decr func to accept pointer, not reference
+    des_encrypt(bdata, bdata_size, cif, &cif_size, key);
+
+    std::cout << C_CYAN "Encoded sequence (HEX):" C_RESET " \n";
+    print_array_hex(cif, cif_size);
+    print_array_hex_line(cif, cif_size);
+    printf("\n");
+
+    FREE(data);
+    FREE(bdata);
+    FREE(cif);
+    FREE(key);
+}
+
+void main_case_des_decode()
+{
+    printf(DES_STR);
+    printf("Key: ");
+    std::string key_str;
+    std::cin >> key_str;
+    byte_t *key = NULL;
+    size_t key_size;
+    parse_hex_str(&key, &key_size, (char *)key_str.c_str());
+    print_array_hex(key, key_size);
+    printf("Enter sequence to decode (HEX):\n");
+    std::string input_str;
+    std::getline(std::cin >> std::ws, input_str);
+
+    std::cout << input_str << std::endl;
+
+    byte_t *data = NULL;
+    size_t data_size;
+    parse_hex_str(&data, &data_size, (char *)input_str.c_str());
+    print_array_hex(data, data_size);
+
+    size_t dec_size = data_size;
+    byte_t *dec = ALLOC(byte_t, dec_size);
+    // TODO: rewrite decr func to accept pointer, not reference
+    des_decrypt(data, data_size, dec, &dec_size, key);
+    std::cout << C_CYAN "Decoded sequence (HEX):" C_RESET " \n";
+    print_array_hex_line(dec, dec_size);
+    printf("\n");
+    std::cout << C_CYAN "Decoded sequence (ASCII):" C_RESET " \n";
+    print_array_ascii((char *)dec, dec_size);
+    printf("\n");
+    FREE(data);
+    FREE(dec);
+    FREE(key);
+}
+
 void main_interface()
 {
-    ime_enter_alt_screen();
-    // ime_exit_alt_screen();
-    ime_clear_screen();
-
-    printf(IME_ESC IME_RGB_COLOR(0, 255, 255) IME_ESC_END
-           "CIFS.CPP" C_RESET " \n");
-    printf("===--- CIFS \n");
-    printf("  1) RSA\n");
-    printf("  2) ELGAMAL\n");
-    printf("  3) ELGAMAL SIGNATURE\n");
-    printf("===--- BENCHMARKS \n");
-    printf("  4) RSA\n");
-    printf("  5) ELGAMAL\n");
-    printf("  6) ELGAMAL SIGNATURE\n");
-    printf("  7) Run all tests\n");
-
-    printf(INPUT_STR);
-    int input;
-    std::cin >> input;
-    ime_clear_screen();
-
-    switch (input)
+    while (1)
     {
-    case 1:
-    {
-        printf(RSA_STR);
-        printf("===--- MODES \n");
-        printf("  1) Generate keys & Encode\n");
-        printf("  2) Enter key & Encode\n");
-        printf("  3) Decode\n");
+        ime_enter_alt_screen();
+        // ime_exit_alt_screen();
+        ime_clear_screen();
+
+        printf(IME_ESC IME_RGB_COLOR(0, 255, 255) IME_ESC_END
+               "CIFS.CPP" C_RESET " \n");
+        printf("===--- CIFS \n");
+        printf("  1) RSA\n");
+        printf("  2) ElGamal\n");
+        printf("  3) ElGamal Signature\n");
+        printf("  4) DES\n");
+        printf("===--- BENCHMARKS \n");
+        printf("  4) RSA\n");
+        printf("  5) ElGamal\n");
+        printf("  6) ElGamal Signature\n");
+        printf("  7) Run all tests\n");
+
+#define __ML_RSA 1
+#define __ML_ELGAMAL 2
+#define __ML_ELGAMAL_SIG 3
+#define __ML_DES 4
+#define __ML_RSA_BENCH 5
+#define __ML_ELGAMAL_BENCH 6
+#define __ML_ELGAMAL_SIG_BENCH 7
+#define __ML_TESTS 8
 
         printf(INPUT_STR);
+        int input;
         std::cin >> input;
         ime_clear_screen();
 
         switch (input)
         {
-        case 1:
+        case __ML_RSA:
         {
-            main_case_rsa_genkey();
+            printf(RSA_STR);
+            printf("===--- MODES \n");
+            printf("  1) Generate keys\n");
+            printf("  2) Encode\n");
+            printf("  3) Decode\n");
+
+            printf(INPUT_STR);
+            std::cin >> input;
+            ime_clear_screen();
+
+            switch (input)
+            {
+            case 1:
+            {
+                main_case_rsa_genkey();
+                getchar();
+                break;
+            }
+            case 2:
+            {
+                main_case_rsa_encode();
+                getchar();
+                break;
+            }
+            case 3:
+            {
+                main_case_rsa_decode();
+                getchar();
+                break;
+            }
+            default:
+            {
+                printf(INVALID_INPUT_STR);
+                getchar();
+                return;
+            }
+            }
             break;
         }
-        case 2:
+        case __ML_ELGAMAL:
         {
-            main_case_rsa_setkey();
+            printf(ELGAMAL_STR);
+            printf("===--- MODES \n");
+            printf("  1) Generate keys\n");
+            printf("  2) Encode\n");
+            printf("  3) Decode\n");
+
+            printf(INPUT_STR);
+            std::cin >> input;
+            ime_clear_screen();
+
+            switch (input)
+            {
+            case 1:
+            {
+                main_case_elg_genkey();
+                getchar();
+                break;
+            }
+            case 2:
+            {
+                main_case_elg_setkey();
+                getchar();
+                break;
+            }
+            case 3:
+            {
+                main_case_elg_decode();
+                getchar();
+                break;
+            }
+            default:
+            {
+                printf(INVALID_INPUT_STR);
+                return;
+            }
+            }
             break;
         }
-        case 3:
+        case __ML_ELGAMAL_SIG:
         {
-            main_case_rsa_decode();
+            printf(ELGSIG_STR);
+            printf("===--- MODES \n");
+            printf("  1) Generate keys\n");
+            printf("  2) Sign\n");
+            printf("  3) Check sign\n");
+
+            printf(INPUT_STR);
+            std::cin >> input;
+            ime_clear_screen();
+
+            switch (input)
+            {
+            case 1:
+            {
+                main_case_elgsig_genkey();
+                getchar();
+                break;
+            }
+            case 2:
+            {
+                main_case_elgsig_setkey();
+                getchar();
+                break;
+            }
+            case 3:
+            {
+                main_case_elgsig_check();
+                getchar();
+                break;
+            }
+            default:
+            {
+                printf(INVALID_INPUT_STR);
+                getchar();
+                return;
+            }
+            }
+            break;
+        }
+        case __ML_DES:
+        {
+            printf(DES_STR);
+            printf("===--- MODES \n");
+            printf("  1) Generate keys\n");
+            printf("  2) Encode\n");
+            printf("  3) Decode\n");
+
+            printf(INPUT_STR);
+            std::cin >> input;
+            ime_clear_screen();
+
+            switch (input)
+            {
+            case 1:
+            {
+                main_case_des_genkey();
+                getchar();
+                break;
+            }
+            case 2:
+            {
+                main_case_des_encode();
+                break;
+            }
+            case 3:
+            {
+                main_case_des_decode();
+                getchar();
+                break;
+            }
+            default:
+            {
+                printf(INVALID_INPUT_STR);
+                return;
+            }
+            }
+            break;
+        }
+        case __ML_RSA_BENCH:
+        {
+            ime_exit_alt_screen();
+            rsa_bench();
+            getchar();
+            break;
+        }
+        case __ML_ELGAMAL_BENCH:
+        {
+            ime_exit_alt_screen();
+            elg_bench();
+            getchar();
+            break;
+        }
+        case __ML_ELGAMAL_SIG_BENCH:
+        {
+            ime_exit_alt_screen();
+            elgsig_bench();
+            getchar();
+            break;
+        }
+        case __ML_TESTS:
+        {
+            ime_exit_alt_screen();
+            printf(TESTS_STR);
+            test_rsa_array();
+            test_elg_array();
+            test_elgsig_array();
+            rsa_bench();
+            elg_bench();
+            elgsig_bench();
+            getchar();
             break;
         }
         default:
         {
+            ime_exit_alt_screen();
             printf(INVALID_INPUT_STR);
             return;
         }
         }
-        break;
-    }
-    case 2:
-    {
-        printf(ELGAMAL_STR);
-        printf("===--- MODES \n");
-        printf("  1) Generate keys & Encode\n");
-        printf("  2) Enter key & Encode\n");
-        printf("  3) Decode\n");
 
-        printf(INPUT_STR);
-        std::cin >> input;
-        ime_clear_screen();
-
-        switch (input)
-        {
-        case 1:
-        {
-            main_case_elg_genkey();
-            break;
-        }
-        case 2:
-        {
-            main_case_elg_setkey();
-            break;
-        }
-        case 3:
-        {
-            main_case_elg_decode();
-            break;
-        }
-        default:
-        {
-            printf(INVALID_INPUT_STR);
-            return;
-        }
-        }
-        break;
-    }
-    case 3:
-    {
-        printf(ELGSIG_STR);
-        printf("===--- MODES \n");
-        printf("  1) Generate keys & Sign\n");
-        printf("  2) Enter key & Sign\n");
-        printf("  3) Check sign\n");
-
-        printf(INPUT_STR);
-        std::cin >> input;
-        ime_clear_screen();
-
-        switch (input)
-        {
-        case 1:
-        {
-            main_case_elgsig_genkey();
-            break;
-        }
-        case 2:
-        {
-            main_case_elgsig_setkey();
-            break;
-        }
-        case 3:
-        {
-            main_case_elgsig_check();
-            break;
-        }
-        default:
-        {
-            printf(INVALID_INPUT_STR);
-            return;
-        }
-        }
-        break;
-    }
-    case 4:
-    {
-        ime_exit_alt_screen();
-        rsa_bench();
         getchar();
-        break;
-    }
-    case 5:
-    {
         ime_exit_alt_screen();
-        elg_bench();
-        getchar();
-        break;
     }
-    case 6:
-    {
-        ime_exit_alt_screen();
-        elgsig_bench();
-        getchar();
-        break;
-    }
-    case 7:
-    {
-        ime_exit_alt_screen();
-        printf(TESTS_STR);
-        test_rsa_array();
-        test_elg_array();
-        test_elgsig_array();
-        rsa_bench();
-        elg_bench();
-        elgsig_bench();
-        getchar();
-        break;
-    }
-    default:
-    {
-        ime_exit_alt_screen();
-        printf(INVALID_INPUT_STR);
-        return;
-    }
-    }
-
-    getchar();
-    ime_exit_alt_screen();
 }
 
 static const char *const usages[] = {
@@ -2448,11 +2683,6 @@ static const char *const usages[] = {
     "cifs",
     NULL,
 };
-
-bool str_eq(const char *str1, const char *str2)
-{
-    return strcmp(str1, str2) == 0;
-}
 
 void read_bin_file(byte_t **bytes, size_t *size, const char *file_name)
 {
@@ -2523,14 +2753,8 @@ void read_bin_file_chunk(byte_t **bytes, size_t *size,
                          const char *file_name)
 {
     FILE *file = fopen(file_name, "rb");
-    if (file == NULL)
-    {
-        if (!log_quiet_lvl)
-        {
-            std::cerr << "Can't open file: " << file_name << std::endl;
-        }
-        exit(1);
-    }
+    MASSERT(file != NULL, "Can't open file");
+
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
@@ -2550,6 +2774,11 @@ void read_bin_file_chunk(byte_t **bytes, size_t *size,
     fclose(file);
 }
 
+/// @brief Write chunk of data to a specified position in file
+/// @param bytes data to write
+/// @param size data size
+/// @param start start position in file
+/// @param file_name file name
 void write_bin_file_chunk(const byte_t *bytes, size_t size,
                           size_t start, const char *file_name)
 {
@@ -2591,26 +2820,77 @@ size_t file_size(const char *file_name)
     return file_size;
 }
 
+/// @brief Shuffle data for encryption
+/// @param data
+/// @param data_size
+void byte_shuffle(byte_t *data, size_t data_size)
+{
+    // b = (b+a) % 0xFF
+    byte_t b = 0x00;
+    for (size_t i = 0; i < data_size; i++)
+    {
+        b = (b + data[i]) % 0xFF;
+        data[i] = b;
+    }
+}
+
+/// @brief Unshuffle data after decryption
+/// @param data
+/// @param data_size
+void byte_unshuffle(byte_t *data, size_t data_size)
+{
+    byte_t b = 0x00;
+    for (size_t i = 0; i < data_size; i++)
+    {
+        byte_t current = data[i];
+        data[i] = (data[i] - b + 0xFF) % 0xFF;
+        b = current;
+    }
+}
+
 // ===--- <DEV> ---=============================================================
 
+/// @brief Debug function
 void dev_func()
 {
+    // byte_t data[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
+    // size_t data_size = sizeof(data) / sizeof(data[0]);
+    // print_array_hex(data, data_size);
+    // byte_shuffle(data, data_size);
+    // print_array_hex(data, data_size);
+    // byte_unshuffle(data, data_size);
+    // print_array_hex(data, data_size);
+
+    // exit(0);
+
     // Key gen
     byte_t *des_key_ = ALLOC(byte_t, 8);
+    MASSERT(des_key_ != NULL, "Memory allocation error");
     des_generate_key(des_key_);
+    // 0x4530aa9d1a71e918
+    des_key_[0] = 0x45;
+    des_key_[1] = 0x30;
+    des_key_[2] = 0xaa;
+    des_key_[3] = 0x9d;
+    des_key_[4] = 0x1a;
+    des_key_[5] = 0x71;
+    des_key_[6] = 0xe9;
+    des_key_[7] = 0x18;
+
     printf("Key: ");
     for (int i = 0; i < 8; i++)
     {
         printf("%02X ", des_key_[i]);
     }
     printf("\n");
-    byte_t data[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
+    byte_t data[] = {0x99, 0x97, 0x74, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
     size_t data_size = sizeof(data) / sizeof(data[0]);
     printf("Data: ");
     print_array_hex(data, data_size);
 
     // Encrypt
     byte_t *enc_data = ALLOC(byte_t, data_size);
+    MASSERT(enc_data != NULL, "Memory allocation error");
     size_t enc_size;
 
     des_encrypt(data, data_size, enc_data, &enc_size, des_key_);
@@ -2620,6 +2900,7 @@ void dev_func()
 
     // Decrypt
     byte_t *dec_data = ALLOC(byte_t, data_size);
+    MASSERT(dec_data != NULL, "Memory allocation error");
     size_t dec_size;
 
     des_decrypt(enc_data, enc_size, dec_data, &dec_size, des_key_);
@@ -2644,6 +2925,7 @@ int main(int argc, const char **argv)
         const char *mode = NULL;
         int encode = 0;
         int decode = 0;
+        int shuffle = 0;
         struct argparse_option options[] = {
             OPT_HELP(),
 
@@ -2655,11 +2937,10 @@ int main(int argc, const char **argv)
             OPT_BOOLEAN((char)NULL, "shutup", &log_shutup_lvl,
                         "log nothing", NULL, 0, 0),
             OPT_STRING('m', "mode", &mode,
-                       "mode to run ('rsa'- RSA, 'elg' - ElGamal, "
-                       "'elgsig' - ElGamal signature)",
+                       "mode to run",
                        NULL, 0, 0),
 
-            OPT_GROUP(C_HEADER "RSA" C_RESET " "),
+            OPT_GROUP(C_HEADER "RSA" C_RESET " <rsa>"),
             OPT_BOOLEAN('e', "encode", &encode, "encode data", NULL, 0, 0),
             OPT_BOOLEAN('d', "decode", &decode, "decode data", NULL, 0, 0),
             OPT_STRING('f', "file", &file, "path to input file", NULL, 0, 0),
@@ -2668,7 +2949,7 @@ int main(int argc, const char **argv)
             OPT_STRING('k', "key", &key, "encoding/decoding key", NULL, 0, 0),
             OPT_STRING('n', "n", &ring, "N key", NULL, 0, 0),
 
-            OPT_GROUP(C_HEADER "ElGamal" C_RESET " "),
+            OPT_GROUP(C_HEADER "ElGamal" C_RESET " <elg>"),
             OPT_BOOLEAN('e', "encode", &encode, "encode data", NULL, 0, 0),
             OPT_BOOLEAN('d', "decode", &decode, "decode data", NULL, 0, 0),
             OPT_STRING('f', "file", &file, "path to input file", NULL, 0, 0),
@@ -2680,7 +2961,7 @@ int main(int argc, const char **argv)
                        "generator key (encoding)", NULL, 0, 0),
             OPT_STRING('n', "n", &ring, "N key", NULL, 0, 0),
 
-            OPT_GROUP(C_HEADER "ElGamal signature" C_RESET " "),
+            OPT_GROUP(C_HEADER "ElGamal signature" C_RESET " <elgsig>"),
             OPT_BOOLEAN('s', "sign", &encode, "sign data", NULL, 0, 0),
             OPT_BOOLEAN('c', "check", &decode, "check sign", NULL, 0, 0),
             OPT_STRING('f', "file", &file, "path to input file", NULL, 0, 0),
@@ -2690,6 +2971,8 @@ int main(int argc, const char **argv)
             OPT_STRING('g', "generator", &add_key,
                        "generator key (signing)", NULL, 0, 0),
             OPT_STRING('n', "n", &ring, "N key", NULL, 0, 0),
+
+            OPT_GROUP(C_HEADER "DES" C_RESET " <des>"),
 
             OPT_GROUP(C_HEADER "Maintenance options" C_RESET " "),
             OPT_BOOLEAN((char)NULL, "fix-screen", &fix_screen,
@@ -2759,7 +3042,6 @@ int main(int argc, const char **argv)
         byte_t *bytes;
         size_t bytes_size;
 
-        printf("DBG: %s\n", mode);
         if (str_eq("rsa", mode))
         {
             if (encode)
