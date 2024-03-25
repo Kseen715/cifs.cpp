@@ -3048,6 +3048,7 @@ void main_case_elgsig_check()
     uint_t *cif = NULL;
     size_t cif_size;
     sread_dec_modulo((char *)input_str.c_str(), &cif, &cif_size, p);
+    // TODO: fix random errors (probably with overflow, appears with N > 0xFF)
     bool res = elgsig_check(cif, cif_size, key_y, key_g, p, data, data_size);
     std::cout << (res ? C_GREEN "Signature is valid" C_RESET " "
                       : C_RED "Signature is NOT valid" C_RESET " ")
