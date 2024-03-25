@@ -1,6 +1,9 @@
 .vscode/
 build/
-*КБ*
+*Копия*
 *.txt
 *.bin
 cifs.o
+*.bkp
+*.tmp
+~*
