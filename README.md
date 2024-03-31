@@ -21,8 +21,9 @@ After building the project, you can run the program using the following command:
 ```
 
 ## Credits
-- [tqdm.hpp](https://github.com/mraggi/tqdm-cpp) by [mraggi](https://github.com/mraggi) - A simple C++ single-header library for displaying progress bars in the terminal.
-- [argparse.h](https://github.com/cofyc/argparse) by [cofyc](https://github.com/cofyc) - A simple argument parser for C.
+- [tqdm.hpp](https://github.com/mraggi/tqdm-cpp) by [mraggi](https://github.com/mraggi) - C++ single-header library for displaying progress bars in the terminal.
+- [argparse.h](https://github.com/cofyc/argparse) by [cofyc](https://github.com/cofyc) - Simple argument parser for C.
+- [Perlin-Noise-Implementation](https://github.com/Maharshi-Pandya/Perlin-Noise-Implementation) by [Maharshi-Pandya](https://github.com/Maharshi-Pandya) - Perlin noise algorithm implementation in C.
 
 ## Screenshots
 

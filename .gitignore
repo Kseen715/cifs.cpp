@@ -7,3 +7,4 @@ cifs.o
 *.bkp
 *.tmp
 ~*
+*.bmp

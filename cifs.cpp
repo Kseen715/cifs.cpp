@@ -31,6 +31,9 @@ SOFTWARE.
 #include <cstring>
 #include <fstream>
 
+#include <stdio.h>
+#include <math.h>
+
 #define ADD_EXPORTS
 #define IMECLUI_IMPLEMENTATION
 #include "src/imeclui.h"
@@ -1184,6 +1187,69 @@ void padd_data_to_chunksize(byte_t **data, size_t *data_size, size_t cap)
     *data_size += padd_size;
 }
 
+void save_bmp_greyscale(float *data, size_t cols, size_t rows, char *filename)
+{
+    FILE *f;
+    unsigned char *img = NULL;
+    int filesize = 54 + 3 * cols * rows;
+    if (img)
+        free(img);
+    img = (unsigned char *)malloc(3 * cols * rows);
+    memset(img, 0, 3 * cols * rows);
+
+    size_t x, y;
+    for (x = 0; x < cols; x++)
+    {
+        for (y = 0; y < rows; y++)
+        {
+            int r = (int)((data[y * cols + x]) * 255);
+            int g = (int)((data[y * cols + x]) * 255);
+            int b = (int)((data[y * cols + x]) * 255);
+            if (r > 255)
+                r = 255;
+            if (g > 255)
+                g = 255;
+            if (b > 255)
+                b = 255;
+            img[(x + y * cols) * 3 + 2] = (unsigned char)(r);
+            img[(x + y * cols) * 3 + 1] = (unsigned char)(g);
+            img[(x + y * cols) * 3 + 0] = (unsigned char)(b);
+        }
+    }
+
+    unsigned char bmpfileheader[14] = {'B', 'M', 0, 0, 0, 0, 0,
+                                       0, 0, 0, 54, 0, 0, 0};
+    unsigned char bmpinfoheader[40] = {40, 0, 0, 0,  // header size
+                                       0, 0, 0, 0,   // width
+                                       0, 0, 0, 0,   // height
+                                       1, 0, 24, 0}; // planes, bits per pixel
+    unsigned char bmppad[3] = {0, 0, 0};
+
+    bmpfileheader[2] = (unsigned char)(filesize);
+    bmpfileheader[3] = (unsigned char)(filesize >> 8);
+    bmpfileheader[4] = (unsigned char)(filesize >> 16);
+    bmpfileheader[5] = (unsigned char)(filesize >> 24);
+
+    bmpinfoheader[4] = (unsigned char)(cols);
+    bmpinfoheader[5] = (unsigned char)(cols >> 8);
+    bmpinfoheader[6] = (unsigned char)(cols >> 16);
+    bmpinfoheader[7] = (unsigned char)(cols >> 24);
+    bmpinfoheader[8] = (unsigned char)(rows);
+    bmpinfoheader[9] = (unsigned char)(rows >> 8);
+    bmpinfoheader[10] = (unsigned char)(rows >> 16);
+    bmpinfoheader[11] = (unsigned char)(rows >> 24);
+
+    f = fopen(filename, "wb");
+    fwrite(bmpfileheader, 1, 14, f);
+    fwrite(bmpinfoheader, 1, 40, f);
+    for (size_t i = 0; i < rows; i++)
+    {
+        fwrite(img + (cols * (rows - i - 1) * 3), 3, cols, f);
+        fwrite(bmppad, 1, (4 - (cols * 3) % 4) % 4, f);
+    }
+    fclose(f);
+}
+
 // ===--- RSA CIPHER ---========================================================
 #define __RSA_CIPHER
 
@@ -2278,6 +2344,440 @@ void des_decrypt(byte_t *data, size_t data_size,
     FREE(key_sets);
 }
 
+// ===--- PERLIN NOISE ---======================================================
+#define __PERLIN_NOISE
+
+// ** uncomment if you want the repeatition on
+// ** i.e. want to map the input point co-ordinates to their "local"
+// ** co-ords
+// int rep_amt = <REPEATITION_VALUE_HERE>
+int __pn_rep_amt = -1;
+
+// ✨ Permutation table to calculate the hashes for each corner
+// of the unit cell. This contains ints from 0 to 255 inclusive.
+int __PN_PERM_TABLE[256] = {0x97, 0xA0, 0x89, 0x5B, 0x5A, 0x0F, 0x83, 0x0D,
+                            0xC9, 0x5F, 0x60, 0x35, 0xC2, 0xE9, 0x07, 0xE1,
+                            0x8C, 0x24, 0x67, 0x1E, 0x45, 0x8E, 0x08, 0x63,
+                            0x25, 0xF0, 0x15, 0x0A, 0x17, 0xBE, 0x06, 0x94,
+                            0xF7, 0x78, 0xEA, 0x4B, 0x00, 0x1A, 0xC5, 0x3E,
+                            0x5E, 0xFC, 0xDB, 0xCB, 0x75, 0x23, 0x0B, 0x20,
+                            0x39, 0xB1, 0x21, 0x58, 0xED, 0x95, 0x38, 0x57,
+                            0xAE, 0x14, 0x7D, 0x88, 0xAB, 0xA8, 0x44, 0xAF,
+                            0x4A, 0xA5, 0x47, 0x86, 0x8B, 0x30, 0x1B, 0xA6,
+                            0x4D, 0x92, 0x9E, 0xE7, 0x53, 0x6F, 0xE5, 0x7A,
+                            0x3C, 0xD3, 0x85, 0xE6, 0xDC, 0x69, 0x5C, 0x29,
+                            0x37, 0x2E, 0xF5, 0x28, 0xF4, 0x66, 0x8F, 0x36,
+                            0x41, 0x19, 0x3F, 0xA1, 0x01, 0xD8, 0x50, 0x49,
+                            0xD1, 0x4C, 0x84, 0xBB, 0xD0, 0x59, 0x12, 0xA9,
+                            0xC8, 0xC4, 0x87, 0x82, 0x74, 0xBC, 0x9F, 0x56,
+                            0xA4, 0x64, 0x6D, 0xC6, 0xAD, 0xBA, 0x03, 0x40,
+                            0x34, 0xD9, 0xE2, 0xFA, 0x7C, 0x7B, 0x05, 0xCA,
+                            0x26, 0x93, 0x76, 0x7E, 0xFF, 0x52, 0x55, 0xD4,
+                            0xCF, 0xCE, 0x3B, 0xE3, 0x2F, 0x10, 0x3A, 0x11,
+                            0xB6, 0xBD, 0x1C, 0x2A, 0xDF, 0xB7, 0xAA, 0xD5,
+                            0x77, 0xF8, 0x98, 0x02, 0x2C, 0x9A, 0xA3, 0x46,
+                            0xDD, 0x99, 0x65, 0x9B, 0xA7, 0x2B, 0xAC, 0x09,
+                            0x81, 0x16, 0x27, 0xFD, 0x13, 0x62, 0x6C, 0x6E,
+                            0x4F, 0x71, 0xE0, 0xE8, 0xB2, 0xB9, 0x70, 0x68,
+                            0xDA, 0xF6, 0x61, 0xE4, 0xFB, 0x22, 0xF2, 0xC1,
+                            0xEE, 0xD2, 0x90, 0x0C, 0xBF, 0xB3, 0xA2, 0xF1,
+                            0x51, 0x33, 0x91, 0xEB, 0xF9, 0x0E, 0xEF, 0x6B,
+                            0x31, 0xC0, 0xD6, 0x1F, 0xB5, 0xC7, 0x6A, 0x9D,
+                            0xB8, 0x54, 0xCC, 0xB0, 0x73, 0x79, 0x32, 0x2D,
+                            0x7F, 0x04, 0x96, 0xFE, 0x8A, 0xEC, 0xCD, 0x5D,
+                            0xDE, 0x72, 0x43, 0x1D, 0x18, 0x48, 0xF3, 0x8D,
+                            0x80, 0xC3, 0x4E, 0x42, 0xD7, 0x3D, 0x9C, 0xB4};
+
+// Permutation table to calculate the hashes for each corner
+int __pn_P[512];
+
+// Flag to check if the permutation table exists
+int __pn_perm_flag = 0;
+
+/// @brief Initialize the permutation table with the default values
+void pn_init_default()
+{
+    // double the permutation to avoid overflow
+    for (int idx = 0; idx < 256; idx++)
+    {
+        __pn_P[256 + idx] = __pn_P[idx] = __PN_PERM_TABLE[idx];
+    }
+    // permtable created
+    __pn_perm_flag = 1;
+}
+
+/// @brief Initialize the permutation table with random values
+void pn_init_rand()
+{
+    // double the permutation to avoid overflow
+    for (int idx = 0; idx < 256; idx++)
+    {
+        __pn_P[256 + idx] = __pn_P[idx] = rand() % 256;
+    }
+    // permtable created
+    __pn_perm_flag = 1;
+}
+
+/// @brief Initialize the permutation table with the given values
+/// @param perm_table The permutation table to initialize with,
+/// must be of size 256
+void pn_init(byte_t *perm_table)
+{
+    // double the permutation to avoid overflow
+    for (int idx = 0; idx < 256; idx++)
+    {
+        __pn_P[256 + idx] = __pn_P[idx] = (int)perm_table[idx];
+    }
+    // permtable created
+    __pn_perm_flag = 1;
+}
+
+/// @brief Linearly interpolate between the lo and hi values,
+/// priority given by the param t
+/// @param lo lower bound
+/// @param hi upper bound
+/// @param t priority value
+/// @return float interpolated value
+float __lerp(float lo, float hi, float t)
+{
+    return lo + t * (hi - lo);
+}
+
+/// @brief Calculate the dot product between the random chosen gradient vector
+/// and the distance vector
+/// @param hash The hash value to choose the gradient vector
+/// @param x_comp x component of the distance vector
+/// @param y_comp y component of the distance vector
+/// @param z_comp z component of the distance vector
+/// @return float dot product value
+float __pn_grad(int hash, float x_comp, float y_comp, float z_comp)
+{
+    // use the first 4 bits of the hash to generate 12 random vectors
+    // and "dot" them with (x_comp, y_comp, z_comp)
+
+    int h = hash & 0xF;
+    float w = h < 8 /* 0b1000 */
+                  ? x_comp
+                  : y_comp;
+
+    float t = h < 4 /* 0b100 */
+                  ? y_comp
+                  : (h == 12 || h == 14
+                         ? x_comp
+                         : z_comp);
+
+    // from the first two bits decide if w or t are positive or negative
+    return ((h & 1) == 0 ? w : -w) + ((h & 2) == 0 ? t : -t);
+}
+
+/// @brief Fade function to smooth the interpolation, which has slope of zero
+/// as it reaches the extremes 0 or 1. This is for the smoothness in the noise
+/// value while interpolating
+/// @param tf The input value to fade
+/// @return float The faded value
+float __pn_fadefunc(float tf)
+{
+    return tf * tf * tf * (tf * (6 * tf - 15) + 10);
+}
+
+/// @brief Increment the number and wrap around the repeatition amount
+/// @param num The number to increment
+/// @return int The incremented number
+int __pn_rep_inc(int num)
+{
+    num++;
+    num = __pn_rep_amt > 0 ? num % __pn_rep_amt : num;
+    return num;
+}
+
+/// @brief Calculate the hashes of all the unit cell co-ords
+/// @param xi The x co-ordinate of the unit cell
+/// @param yi The y co-ordinate of the unit cell
+/// @param zi The z co-ordinate of the unit cell
+/// @return int* Stores the hashes into the hash_arr and returns a pointer
+/// to the array
+int *__pn_hash(int xi, int yi, int zi)
+{
+    int *hash_arr = ALLOC(int, 8);
+    /*
+      > There will be 8 hashes for each cell point.
+        Here's the mapping:
+
+        [0] : "aaa"
+        [1] : "baa"
+        [2] : "bba"
+        [3] : "aba"
+        [4] : "aab"
+        [5] : "bab"
+        [6] : "bbb"
+        [7] : "abb"
+    */
+    hash_arr[0] /*aaa*/ = __pn_P[__pn_P[__pn_P[xi] + yi] + zi];
+    hash_arr[1] /*baa*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] + yi] + zi];
+    hash_arr[2] /*bba*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] +
+                                        __pn_rep_inc(yi)] +
+                                 zi];
+    hash_arr[3] /*aba*/ = __pn_P[__pn_P[__pn_P[xi] + __pn_rep_inc(yi)] + zi];
+    hash_arr[4] /*aab*/ = __pn_P[__pn_P[__pn_P[xi] + yi] + __pn_rep_inc(zi)];
+    hash_arr[5] /*bab*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] + yi] +
+                                 __pn_rep_inc(zi)];
+    hash_arr[6] /*bbb*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] +
+                                        __pn_rep_inc(yi)] +
+                                 __pn_rep_inc(zi)];
+    hash_arr[7] /*abb*/ = __pn_P[__pn_P[__pn_P[xi] + __pn_rep_inc(yi)] +
+                                 __pn_rep_inc(zi)];
+
+    return hash_arr;
+}
+
+/// @brief Generate the perlin noise value for the input co-ordinates
+/// if repeat is on, make sure the input co-ordinate map to their "local"
+/// co-ordinates i.e. make sure the co-ordinates wrap-around
+/// @param inp_x The x co-ordinate of the input point
+/// @param inp_y The y co-ordinate of the input point
+/// @param inp_z The z co-ordinate of the input point
+/// @return float The perlin noise value
+float pn_noise(float inp_x, float inp_y, float inp_z)
+{
+    float x = inp_x;
+    float y = inp_y;
+    float z = inp_z;
+    // the *i represent the co-ordinates of the unit cell in which
+    // our input point is located.
+    // the *f represent the relative co-ordinates of input point
+    // relative to the unit cell i.e. (0.5, 0.5, 0.5) will be at the center
+    // of the unit cell
+    int xi, yi, zi;
+    float xf, yf, zf;
+    float u, v, w; // for fading the *f values
+
+    if (__pn_rep_amt > 0)
+    {
+        x = remainderf(x, (float)__pn_rep_amt);
+        y = remainderf(y, (float)__pn_rep_amt);
+        z = remainderf(z, (float)__pn_rep_amt);
+    }
+
+    // init the *i and *f
+    // the *i are bound to 255 to avoid overflow while creating the hashes i.e.
+    // accessing the P[] array
+    xi = (int)x & 255;
+    yi = (int)y & 255;
+    zi = (int)z & 255;
+
+    xf = x - (int)x;
+    yf = y - (int)y;
+    zf = z - (int)z;
+
+    // fade the *f for smoother interpolation
+    u = __pn_fadefunc(xf);
+    v = __pn_fadefunc(yf);
+    w = __pn_fadefunc(zf);
+
+    // get the hashes of all the unit cell co-ords
+    int *hashes = __pn_hash(xi, yi, zi);
+
+    // calculate the dot product between the gradient vectors
+    // and the distance vectors and linearly interpolate between them
+    // ...
+
+    float x1 = __lerp(__pn_grad(hashes[0], xf, yf, zf),
+                      __pn_grad(hashes[1], xf - 1, yf, zf), u);
+
+    float x2 = __lerp(__pn_grad(hashes[3], xf, yf - 1, zf),
+                      __pn_grad(hashes[2], xf - 1, yf - 1, zf), u);
+
+    float y1 = __lerp(x1, x2, v); // 1
+
+    // no need to redefine can overwrite the previously
+    // "lerp-ed" values safely
+    x1 = __lerp(__pn_grad(hashes[4], xf, yf, zf - 1),
+                __pn_grad(hashes[5], xf - 1, yf, zf - 1), u);
+
+    x2 = __lerp(__pn_grad(hashes[7], xf, yf - 1, zf - 1),
+                __pn_grad(hashes[6], xf - 1, yf - 1, zf - 1), u);
+
+    float y2 = __lerp(x1, x2, v); // 2
+
+    FREE(hashes);
+
+    // lerp the two y values and map em in the range [0, 1]
+    return (__lerp(y1, y2, w) + 1) / 2;
+}
+
+/// @brief Generate more "noisy" noise using octaves
+/// this is done by adding contributions of the noise function
+/// iteratively and changing the amplitude and frequency of inputs
+/// @param inp_x The x co-ordinate of the input point
+/// @param inp_y The y co-ordinate of the input point
+/// @param inp_z The z co-ordinate of the input point
+/// @param octaves The number of octaves to generate
+/// @return float The perlin noise value
+float pn_octave_noise(float inp_x, float inp_y, float inp_z, int octaves)
+{
+    // The octave count and the persistance of each octave
+    int octaveCount = octaves;
+    float mulFreq = 2.f;
+    float persistance = .5f;
+    // "summed" noise, frequency and the max amplitude
+    float noiseSum = 0.f;
+    float currFreq = 1.f;
+    float maxAmp = 0.f;
+    float currAmp = 1.0f;
+
+    // iterate through the octaves
+    for (int i = 0; i < octaveCount; i++)
+    {
+        float currNoise = pn_noise(inp_x * currFreq,
+                                   inp_y * currFreq,
+                                   inp_z * currFreq) *
+                          currAmp;
+        noiseSum += currNoise;
+        // resultant value will be in range [0, 1]
+        maxAmp += currAmp;
+        // increase the freq and decrease the amplitude
+        currFreq *= mulFreq;
+        currAmp *= persistance;
+    }
+    // map value in range [0, 1]
+    return (noiseSum / maxAmp);
+}
+
+/// @brief Generate 1D perlin noise
+/// @param data array to store the noise values
+/// @param size size of the array
+/// @param inc increment value
+void pn_noise_1d(float *data, int size, float inc)
+{
+    float xoff = 0.f;
+    for (int x = 0; x < size; x++)
+    {
+        data[x] = pn_noise(xoff, 0, 0);
+        xoff += inc;
+    }
+}
+
+/// @brief Generate 2D perlin noise
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param inc increment value
+void pn_noise_2d(float *data, int rows, int cols, float inc)
+{
+    // xoff and yoff for 2-D generation
+    float xoff = 0.f, yoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            data[x * cols + y] = pn_noise(xoff, yoff, 0);
+            yoff += inc;
+        }
+    }
+}
+
+/// @brief Generate 3D perlin noise
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param depth
+/// @param inc increment value
+void pn_noise_3d(float *data, int rows, int cols, int depth, float inc)
+{
+    // xoff, yoff and zoff for 3-D generation
+    float xoff = 0.f, yoff = 0.f, zoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            yoff += inc;
+            zoff = 0; // for every yoff, zoff starts at zero
+            for (int z = 0; z < depth; z++)
+            {
+                data[x * cols * depth + y * depth + z] =
+                    pn_noise(xoff, yoff, zoff);
+                zoff += inc;
+            }
+        }
+    }
+}
+
+/// @brief Generate 1D perlin noise with octaves
+/// @param data array to store the noise values
+/// @param size
+/// @param inc increment value
+/// @param octaves number of octaves
+void pn_octave_noise_1d(float *data, int size, float inc, int octaves)
+{
+    float xoff = 0.f;
+    for (int x = 0; x < size; x++)
+    {
+        data[x] = pn_octave_noise(xoff, 0, 0, octaves);
+        xoff += inc;
+    }
+}
+
+/// @brief Generate 2D perlin noise with octaves
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param inc increment value
+/// @param octaves number of octaves
+void pn_octave_noise_2d(float *data, int rows, int cols,
+                        float inc, int octaves)
+{
+    // xoff and yoff for 2-D generation
+    float xoff = 0.f, yoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            data[x * cols + y] = pn_octave_noise(xoff, yoff, 0, octaves);
+            yoff += inc;
+        }
+    }
+}
+
+/// @brief Generate 3D perlin noise with octaves
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param depth
+/// @param inc increment value
+/// @param octaves number of octaves
+void pn_octave_noise_3d(float *data, int rows, int cols, int depth,
+                        float inc, int octaves)
+{
+    // xoff, yoff and zoff for 3-D generation
+    float xoff = 0.f, yoff = 0.f, zoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            yoff += inc;
+            zoff = 0; // for every yoff, zoff starts at zero
+            for (int z = 0; z < depth; z++)
+            {
+                data[x * cols * depth + y * depth + z] =
+                    pn_octave_noise(xoff, yoff, zoff, octaves);
+                zoff += inc;
+            }
+        }
+    }
+}
+
 // ===--- BENCHMARKS ---========================================================
 #define __BENCHMARKS
 
@@ -2353,28 +2853,28 @@ void rsa_bench()
     printf("cif\t\xB3");
     std::cout << cif << std::endl;
     printf("c_key_t\t\xB3%.6fms\n",
-           float(rsa_cif_t) / 1000000 / epochs);
+           float(rsa_cif_t) / 1 / epochs);
     printf("dcif\t\xB3");
     std::cout << dcif << std::endl;
     printf("d_key_t\t\xB3%.6fms\n",
-           float(rsa_dcif_t) / 1000000 / epochs);
+           float(rsa_dcif_t) / 1 / epochs);
     printf("sum_t\t\xB3%.6fms\n",
-           float(rsa_dcif_t + rsa_cif_t) / 1000000 / epochs);
+           float(rsa_dcif_t + rsa_cif_t) / 1 / epochs);
     printf("\nnum\t\xB3");
     std::cout << num << std::endl;
     printf("enc\t\xB3");
     std::cout << encd << std::endl;
     printf("enc_t\t\xB3%.6fms\n",
-           float(encd_t) / 1000000 / enc_epochs);
+           float(encd_t) / 1 / enc_epochs);
     printf("dec\t\xB3");
     std::cout << decd << std::endl;
     printf("dec_t\t\xB3%.6fms\n",
-           float(decd_t) / 1000000 / enc_epochs);
+           float(decd_t) / 1 / enc_epochs);
     printf("sum_t\t\xB3%.6fms\n",
-           float(decd_t + encd_t) / 1000000 / enc_epochs);
+           float(decd_t + encd_t) / 1 / enc_epochs);
 #endif // TESTS_VERBOSE
     bool res = decd == num;
-    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(GET_TIME_DIFF(bench_time, GET_CURR_TIME)) / 1000000);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(GET_TIME_DIFF(bench_time, GET_CURR_TIME)) / 1);
 }
 
 void elg_bench()
@@ -2386,7 +2886,7 @@ void elg_bench()
     MASSERT(is_prime(p), "p must be prime");
     MASSERT(m <= p, "m must be less than p");
 
-    int pr_k_iter = 20000000;
+    int pr_k_iter = 20;
     int pu_k_iter = 2000;
     int cif_iter = 20000;
     int dcif_iter = 20000;
@@ -2444,7 +2944,7 @@ void elg_bench()
     printf("\nprivate key:\nx\t\xB3");
     std::cout << key_x << std::endl;
     printf("pr_k_t\t\xB3%.6fms\n",
-           float(pr_k_time) / 1000000 / pr_k_iter);
+           float(pr_k_time) / 1 / pr_k_iter);
     printf("\npublic key:\ny\t\xB3");
     std::cout << key_y << std::endl;
     printf("g\t\xB3");
@@ -2452,28 +2952,28 @@ void elg_bench()
     printf("p\t\xB3");
     std::cout << p << std::endl;
     printf("pu_k_t\t\xB3%.6fms\n",
-           float(pu_k_time) / 1000000 / pu_k_iter);
+           float(pu_k_time) / 1 / pu_k_iter);
     printf("\ncif:\na\t\xB3");
     std::cout << a << std::endl;
     printf("b\t\xB3");
     std::cout << b << std::endl;
     printf("cif_t\t\xB3%.6fms\n",
-           float(cif_time) / 1000000 / cif_iter);
+           float(cif_time) / 1 / cif_iter);
     printf("\ndec:\t\xB3");
     std::cout << decd << std::endl;
     printf("dec_t\t\xB3%.6fms\n",
-           float(decd_t) / 1000000 / dcif_iter);
+           float(decd_t) / 1 / dcif_iter);
 #endif // TESTS_VERBOSE
 
     bool res = decd == m;
-    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1000000);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1);
 }
 
 void elgsig_bench()
 {
     std::cout << "ELGSIG BENCHMARK: ";
 
-    int pr_k_iter = 20000000;
+    int pr_k_iter = 20;
     int pu_k_iter = 2000;
     int sig_iter = 20000;
 
@@ -2522,7 +3022,7 @@ void elgsig_bench()
     printf("\nprivate key:\nx\t\xB3");
     std::cout << key_x << std::endl;
     printf("pr_k_t\t\xB3%.6fms\n",
-           float(pr_k_time) / 1000000 / pr_k_iter);
+           float(pr_k_time) / 1 / pr_k_iter);
     printf("\npublic key:\ny\t\xB3");
     std::cout << key_y << std::endl;
     printf("g\t\xB3");
@@ -2530,17 +3030,17 @@ void elgsig_bench()
     printf("p\t\xB3");
     std::cout << p << std::endl;
     printf("pu_k_t\t\xB3%.6fms\n",
-           float(pu_k_time) / 1000000 / pu_k_iter);
+           float(pu_k_time) / 1 / pu_k_iter);
     printf("\nsig:\na\t\xB3");
     std::cout << a << std::endl;
     printf("b\t\xB3");
     std::cout << b << std::endl;
     printf("sig_t\t\xB3%.6fms\n",
-           float(sig_time) / 1000000 / sig_iter);
+           float(sig_time) / 1 / sig_iter);
 
 #endif // TESTS_VERBOSE
     bool res = elgsig_check(key_y, key_g, a, b, p, m);
-    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1000000);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1);
 }
 
 // ===--- TESTS ---=============================================================
@@ -3406,6 +3906,29 @@ void main_interface()
 /// @brief Debug function
 void dev_func()
 {
+    int rows = 1024;
+    int cols = 1024;
+    float *data = ALLOC(float, rows *cols);
+
+    pn_init_rand();
+    pn_octave_noise_2d(data, rows, cols, 0.01, 8);
+
+    // print min max
+    float min = data[0];
+    float max = data[0];
+    for (int i = 0; i < rows * cols; i++)
+    {
+        if (data[i] < min)
+            min = data[i];
+        if (data[i] > max)
+            max = data[i];
+    }
+    printf("Min: %f, Max: %f\n", min, max);
+
+    save_bmp_greyscale((float *)data, cols, rows,
+                       (char *)"build/perlin_noise.bmp");
+
+    FREE(data);
 }
 
 // ===--- </DEV> ---============================================================
