@@ -4,7 +4,12 @@
 </p>
 
 ## Description
-`cifs.cpp` is a demonstration of RSA and ElGamal encryption and decryption. It is a simple program that uses the RSA and Elgamal algorithms to encrypt and decrypt messages. Written with C++ in C-style.
+`cifs.cpp` is a demonstration of an encryption/decryption algorithms. Written with C++ in C-style.
+
+Implemented algorithms:
+- RSA
+- ElGamal (+ signature)
+- DES
 
 ## Install
 To build the project, you need to have `make` and `g++` (C++17 compatible) installed on your system (or you can use your own build system). Then you can clone the repository and build the project using the following commands:
