@@ -31,6 +31,9 @@ SOFTWARE.
 #include <cstring>
 #include <fstream>
 
+#include <stdio.h>
+#include <math.h>
+
 #define ADD_EXPORTS
 #define IMECLUI_IMPLEMENTATION
 #include "src/imeclui.h"
@@ -64,6 +67,8 @@ int shuffle = 0; // Use byte shuffling, default: 0
 #define GET_TIME_DIFF(start, end) \
     std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()
 
+// Common integer type (unsigned)
+#define uint_t unsigned long long int
 // Common integer type (signed)
 #define int_t long long int
 
@@ -207,13 +212,13 @@ std::ofstream devnull("/dev/null");
 /// @brief Check if the number is prime
 /// @param x number
 /// @return true if the number is prime, false otherwise
-bool is_prime(int_t x)
+bool is_prime(uint_t x)
 {
     if (x < 2)
     {
         return false;
     }
-    for (int_t i = 2; i * i <= x; i++)
+    for (uint_t i = 2; i * i <= x; i++)
     {
         if (x % i == 0)
         {
@@ -229,10 +234,10 @@ bool is_prime(int_t x)
 /// @param p power
 /// @return x^p
 template <typename T>
-T pow(T x, int_t p)
+T pow(T x, uint_t p)
 {
     T res = 1;
-    for (int_t i = 0; i < p; i++)
+    for (uint_t i = 0; i < p; i++)
     {
         res *= x;
     }
@@ -246,10 +251,10 @@ T pow(T x, int_t p)
 /// @param mod modulo
 /// @return x^pow % mod
 template <typename T>
-T pow_mod(T x, int_t pow, int_t mod)
+T pow_mod(T x, uint_t pow, uint_t mod)
 {
     T res = 1;
-    for (int_t i = 0; i < pow; i++)
+    for (uint_t i = 0; i < pow; i++)
     {
         res = (res * x) % mod;
     }
@@ -260,9 +265,9 @@ T pow_mod(T x, int_t pow, int_t mod)
 /// @param g number
 /// @param p modulo
 /// @return true if g is a primitive root modulo p, false otherwise
-bool is_primitive_root_mod(int_t g, int_t p)
+bool is_primitive_root_mod(uint_t g, uint_t p)
 {
-    for (int_t j = 1; j < p - 1; j++)
+    for (uint_t j = 1; j < p - 1; j++)
     {
         if (pow_mod(g, j, p) == 1)
         {
@@ -275,9 +280,9 @@ bool is_primitive_root_mod(int_t g, int_t p)
 /// @brief Get the primitive root modulo p
 /// @param p modulo
 /// @return primitive root modulo p
-int_t primitive_root_mod(int_t p)
+uint_t primitive_root_mod(uint_t p)
 {
-    for (int_t i = 2; i < p; i++)
+    for (uint_t i = 2; i < p; i++)
     {
         if (is_primitive_root_mod(i, p))
         {
@@ -290,9 +295,9 @@ int_t primitive_root_mod(int_t p)
 /// @brief Coprime number to the given one
 /// @param num number
 /// @return coprime number
-int_t coprime(int_t num)
+uint_t coprime(uint_t num)
 {
-    for (int_t i = 2; i < num; i++)
+    for (uint_t i = 2; i < num; i++)
     {
         if (num % i != 0)
         {
@@ -306,9 +311,9 @@ int_t coprime(int_t num)
 /// @param k number
 /// @param p modulo
 /// @return multiplicative inverse of k modulo p
-int_t multiplicative_inverse(int_t k, int_t p)
+uint_t multiplicative_inverse(uint_t k, uint_t p)
 {
-    for (int_t i = 1; i < p; i++)
+    for (uint_t i = 1; i < p; i++)
     {
         if ((k * i) % p == 1)
         {
@@ -352,6 +357,27 @@ void byte_shuffle(byte_t *data, size_t data_size)
     }
 }
 
+/// @brief Shuffle data for encryption
+/// @tparam T type of the data
+/// @param data
+/// @param data_size
+template <typename T>
+void type_shuffle(T *data, size_t data_size)
+{
+    T mask = 0;
+    for (size_t i = 0; i < sizeof(T); i++)
+    {
+        mask = (mask << 8) + 0xFF;
+    }
+    // b = (b+a) % 0xFF
+    T b = 0x00;
+    for (size_t i = 0; i < data_size; i++)
+    {
+        b = (b + data[i]) % mask;
+        data[i] = b;
+    }
+}
+
 /// @brief Unshuffle data after decryption
 /// @param data
 /// @param data_size
@@ -366,15 +392,40 @@ void byte_unshuffle(byte_t *data, size_t data_size)
     }
 }
 
+/// @brief Unshuffle data after decryption
+/// @tparam T type of the data
+/// @param data
+/// @param data_size
+template <typename T>
+void type_unshuffle(T *data, size_t data_size)
+{
+    T mask = 0;
+    for (size_t i = 0; i < sizeof(T); i++)
+    {
+        mask = (mask << 8) + 0xFF;
+    }
+    T b = 0x00;
+    for (size_t i = 0; i < data_size; i++)
+    {
+        T current = data[i];
+        data[i] = (data[i] - b + mask) % mask;
+        b = current;
+    }
+    // NOTE [Kseen]: this is not a perfect unshuffle, but it's good enough
+    // for some reasons it may return values a 1 lower
+    // for (size_t i = 0; i < data_size; i++)
+    //     data[i]++;
+}
+
 // ===--- SERVICE ---===========================================================
 #define __SERVICE
 
 /// @brief Length of the number in hexadecimal representation
 /// @param num number
 /// @return length of the number in hexadecimal representation
-int_t hex_num_len(int_t num)
+uint_t hex_num_len(uint_t num)
 {
-    int_t res = 1;
+    uint_t res = 1;
     while (num > 15)
     {
         num >>= 4;
@@ -386,9 +437,9 @@ int_t hex_num_len(int_t num)
 /// @brief Length of the number in decimal representation
 /// @param num number
 /// @return length of the number in decimal representation
-int_t dec_num_len(int_t num)
+uint_t dec_num_len(uint_t num)
 {
-    int_t res = 1;
+    uint_t res = 1;
     while (num > 9)
     {
         num /= 10;
@@ -404,8 +455,8 @@ int_t dec_num_len(int_t num)
 /// @param N modulo
 /// @param file_name file name
 /// @warning DEPRECATED, will be removed in future
-void fwrite_dec_modulo(int_t *data, size_t data_size,
-                       int_t N, const char *file_name)
+void fwrite_dec_modulo(uint_t *data, size_t data_size,
+                       uint_t N, const char *file_name)
 {
     size_t num_len = dec_num_len(N);
     FILE *file = fopen(file_name, "w");
@@ -428,7 +479,7 @@ void fwrite_dec_modulo(int_t *data, size_t data_size,
 /// @param N modulo
 /// @param file_name file name
 /// @warning DEPRECATED, will be removed in future
-void fwrite_hex_modulo(int_t *data, size_t data_size, int_t N,
+void fwrite_hex_modulo(uint_t *data, size_t data_size, uint_t N,
                        const char *file_name)
 {
     size_t num_len = hex_num_len(N);
@@ -460,8 +511,8 @@ void fwrite_bin(const byte_t *bytes, size_t size, const char *file_name)
 /// @param N modulo
 /// @param str pointer to the result
 /// @warning The result must be freed after usage
-void swrite_dec_modulo(int_t *data, size_t data_size,
-                       int_t N, char **str)
+void swrite_dec_modulo(uint_t *data, size_t data_size,
+                       uint_t N, char **str)
 {
     size_t num_len = dec_num_len(N);
     char *res = ALLOC(char, (data_size * num_len));
@@ -480,6 +531,33 @@ void swrite_dec_modulo(int_t *data, size_t data_size,
     *str = res;
 }
 
+/// @brief Write array of integers to a sting buffer as decimal numbers with
+/// leading zeros
+/// @param data array of integers
+/// @param data_size
+/// @param str pointer to the result
+/// @warning The result must be freed after usage
+void swrite_dec(uint_t *data, size_t data_size, char **str)
+{
+    // TODO: remove
+    size_t max_len = 20;
+    char *res = CALLOC(char, data_size * 20);
+    MASSERT(res != NULL, "Memory allocation failed");
+    for (size_t i = 0; i < data_size; i++)
+    {
+        size_t num_len = dec_num_len(data[i]);
+        for (size_t j = 0; j < max_len - num_len; j++)
+        {
+            *res = '0';
+            res++;
+        }
+        sprintf(res, "%lld", (int64_t)data[i]);
+        res += num_len;
+    }
+    res -= data_size * max_len;
+    *str = res;
+}
+
 /// @brief Write array of integers to a sting buffer as hexadecimal numbers with
 /// leading zeros
 /// @param data array of integers
@@ -487,7 +565,7 @@ void swrite_dec_modulo(int_t *data, size_t data_size,
 /// @param N modulo
 /// @param str pointer to the result
 /// @warning The result must be freed after usage
-void swrite_hex_modulo(int_t *data, size_t data_size, int_t N, char **str)
+void swrite_hex_modulo(uint_t *data, size_t data_size, uint_t N, char **str)
 {
     size_t num_len = hex_num_len(N);
     char *res = ALLOC(char, data_size *num_len);
@@ -501,6 +579,26 @@ void swrite_hex_modulo(int_t *data, size_t data_size, int_t N, char **str)
     *str = res;
 }
 
+/// @brief Write byte array to a string buffer as hexadecimal numbers with
+/// leading zeros
+/// @param data
+/// @param data_size
+/// @param str pointer to the result
+/// @warning The result must be freed after usage
+void swrite_hex(byte_t *data, size_t data_size, char **str)
+{
+    char *res = ALLOC(char, data_size * 2 + 1);
+    MASSERT(res != NULL, "Memory allocation failed");
+    for (size_t i = 0; i < data_size; i++)
+    {
+        sprintf(res, "%02X", data[i]);
+        res += 2;
+    }
+    res -= data_size * 2;
+    *res = '\0';
+    *str = res;
+}
+
 /// @brief Read array of integers from a file as decimal numbers with
 /// leading zeros
 /// @param data pointer to the result
@@ -508,7 +606,7 @@ void swrite_hex_modulo(int_t *data, size_t data_size, int_t N, char **str)
 /// @param N modulo
 /// @param file_name file name
 /// @warning The result must be freed after usage
-void fread_dec_modulo(int_t **data, size_t *data_size, int_t N,
+void fread_dec_modulo(uint_t **data, size_t *data_size, uint_t N,
                       const char *file_name)
 {
     FILE *file = fopen(file_name, "r");
@@ -522,11 +620,11 @@ void fread_dec_modulo(int_t **data, size_t *data_size, int_t N,
     fclose(file);
     size_t num_len = dec_num_len(N);
     size_t num_count = file_size / num_len;
-    int_t *res = ALLOC(int_t, num_count);
+    uint_t *res = ALLOC(uint_t, num_count);
     MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < num_count; i++)
     {
-        int_t num = 0;
+        uint_t num = 0;
         for (size_t j = 0; j < num_len; j++)
         {
             num = num * 10 + buffer[i * num_len + j] - '0';
@@ -545,7 +643,7 @@ void fread_dec_modulo(int_t **data, size_t *data_size, int_t N,
 /// @param N modulo
 /// @param file_name
 /// @warning The result must be freed after usage
-void fread_hex_modulo(int_t **data, size_t *data_size, int_t N,
+void fread_hex_modulo(uint_t **data, size_t *data_size, uint_t N,
                       const char *file_name)
 {
     FILE *file = fopen(file_name, "r");
@@ -563,20 +661,20 @@ void fread_hex_modulo(int_t **data, size_t *data_size, int_t N,
     size_t num_len = hex_num_len(N);
     size_t num_count = file_size / num_len;
 
-    int_t *res = ALLOC(int_t, num_count);
+    uint_t *res = ALLOC(uint_t, num_count);
     MASSERT(res != NULL, "Memory allocation failed");
 
     for (size_t i = 0; i < num_count; i++)
     {
-        int_t num = 0;
+        uint_t num = 0;
         for (size_t j = 0; j < num_len; j++)
         {
             num = (num << 4) + buffer[i * num_len + j] - '0' -
-                  ((int_t)((buffer[i * num_len + j] >= 'A') &&
-                           (buffer[i * num_len + j] <= 'F')) *
+                  ((uint_t)((buffer[i * num_len + j] >= 'A') &&
+                            (buffer[i * num_len + j] <= 'F')) *
                    7) -
-                  ((int_t)((buffer[i * num_len + j] >= 'a') &&
-                           (buffer[i * num_len + j] <= 'f')) *
+                  ((uint_t)((buffer[i * num_len + j] >= 'a') &&
+                            (buffer[i * num_len + j] <= 'f')) *
                    39);
         }
         res[i] = num;
@@ -611,19 +709,51 @@ void fread_bin(byte_t **bytes, size_t *size, const char *file_name)
 /// @param data_size
 /// @param N
 /// @warning The result must be freed after usage
-void sread_dec_modulo(char *str, int_t **data, size_t *data_size, int_t N)
+void sread_dec_modulo(char *str, uint_t **data, size_t *data_size, uint_t N)
 {
     // chop str to N-sized parts, then atoi them
     size_t num_len = dec_num_len(N);
     size_t num_count = strlen(str) / num_len;
-    int_t *res = ALLOC(int_t, num_count);
+    uint_t *res = ALLOC(uint_t, num_count);
     MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < num_count; i++)
     {
-        int_t num = 0;
+        uint_t num = 0;
         for (size_t j = 0; j < num_len; j++)
         {
             num = num * 10 + str[i * num_len + j] - '0';
+        }
+        res[i] = num;
+    }
+    *data = res;
+    *data_size = num_count;
+}
+
+/// @brief Read array of integers from a string buffer as hexadecimal numbers with
+/// leading zeros
+/// @param str string buffer
+/// @param data pointer to the result
+/// @param data_size
+/// @param N
+/// @warning The result must be freed after usage
+void sread_hex_modulo(char *str, uint_t **data, size_t *data_size, uint_t N)
+{
+    size_t num_len = hex_num_len(N);
+    size_t num_count = strlen(str) / num_len;
+    uint_t *res = ALLOC(uint_t, num_count);
+    MASSERT(res != NULL, "Memory allocation failed");
+    for (size_t i = 0; i < num_count; i++)
+    {
+        uint_t num = 0;
+        for (size_t j = 0; j < num_len; j++)
+        {
+            num = (num << 4) + str[i * num_len + j] - '0' -
+                  ((uint_t)((str[i * num_len + j] >= 'A') &&
+                            (str[i * num_len + j] <= 'F')) *
+                   7) -
+                  ((uint_t)((str[i * num_len + j] >= 'a') &&
+                            (str[i * num_len + j] <= 'f')) *
+                   39);
         }
         res[i] = num;
     }
@@ -736,7 +866,7 @@ bool cmp_arrays(T *arr1, size_t arr1_size, T *arr2, size_t arr2_size)
 /// @param data_size
 /// @param str pointer to the result
 /// @warning The result must be freed after usage
-void convert_array_to_str(int_t *data, size_t data_size, char **str)
+void convert_array_to_str(uint_t *data, size_t data_size, char **str)
 {
     char *res = CALLOC(char, data_size);
     MASSERT(res != NULL, "Memory allocation failed");
@@ -753,14 +883,14 @@ void convert_array_to_str(int_t *data, size_t data_size, char **str)
 /// @param data pointer to the result
 /// @param data_size
 /// @warning The result must be freed after usage
-void convert_str_to_array(char *str, int_t **data, size_t *data_size)
+void convert_str_to_array(char *str, uint_t **data, size_t *data_size)
 {
     size_t str_len = strlen(str);
-    int_t *res = ALLOC(int_t, str_len);
+    uint_t *res = ALLOC(uint_t, str_len);
     MASSERT(res != NULL, "Memory allocation failed");
     for (size_t i = 0; i < str_len; i++)
     {
-        res[i] = (int_t)str[i];
+        res[i] = (uint_t)str[i];
     }
     *data = res;
     *data_size = str_len;
@@ -771,7 +901,7 @@ void convert_str_to_array(char *str, int_t **data, size_t *data_size)
 /// @param data pointer to the result
 /// @param data_size
 /// @warning The result must be freed after usage
-void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
+void parse_str_to_ints(char *str, uint_t **data, size_t *data_size)
 {
     for (size_t i = 0; i < strlen(str); i++)
     {
@@ -784,7 +914,7 @@ void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
             str[i] = ' ';
         }
     }
-    std::vector<int_t> lst;
+    std::vector<uint_t> lst;
     char *token = strtok(str, " ");
     while (token != NULL)
     {
@@ -792,7 +922,7 @@ void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
         token = strtok(NULL, " ");
     }
     *data_size = lst.size();
-    SCRAP_VECTOR(*data, lst, int_t);
+    SCRAP_VECTOR(*data, lst, uint_t);
     MASSERT(*data != NULL, "Memory allocation failed");
 }
 
@@ -800,7 +930,7 @@ void parse_str_to_ints(char *str, int_t **data, size_t *data_size)
 /// @param data
 /// @param data_size
 /// @return true if the string contains only ASCII characters, false otherwise
-bool is_array_ascii(int_t *data, size_t data_size)
+bool is_array_ascii(uint_t *data, size_t data_size)
 {
     for (size_t i = 0; i < data_size; i++)
     {
@@ -831,7 +961,7 @@ bool is_str_contains_alpha(char *str)
 /// @param data
 /// @param data_size
 /// @return true if the array contains any of ASCII characters, false otherwise
-bool is_array_contains_alpha(int_t *data, size_t data_size)
+bool is_array_contains_alpha(uint_t *data, size_t data_size)
 {
     for (size_t i = 0; i < data_size; i++)
     {
@@ -854,7 +984,7 @@ bool is_array_contains_alpha(int_t *data, size_t data_size)
 template <typename T>
 void convert_array_to_bytes_modulo(T *data, size_t data_size,
                                    byte_t **new_data, size_t *new_size,
-                                   int_t N)
+                                   uint_t N)
 {
     size_t byte_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
     *new_size = data_size * byte_len;
@@ -871,6 +1001,23 @@ void convert_array_to_bytes_modulo(T *data, size_t data_size,
     }
 }
 
+/// @brief Convert array of integers to a byte array
+/// @tparam T type of the array elements
+/// @param data array of integers
+/// @param data_size
+/// @param new_data pointer to the result
+/// @param new_size
+/// @warning The result must be freed after usage
+template <typename T>
+void convert_array_to_bytes(T *data, size_t data_size,
+                            byte_t **new_data, size_t *new_size)
+{
+    *new_size = data_size * sizeof(T);
+    *new_data = ALLOC(byte_t, *new_size);
+    MASSERT(*new_data != NULL, "Memory allocation failed");
+    memcpy(*new_data, data, *new_size);
+}
+
 /// @brief Convert byte array to an array of integers
 /// @tparam T type of the array elements
 /// @param data byte array
@@ -882,7 +1029,7 @@ void convert_array_to_bytes_modulo(T *data, size_t data_size,
 template <typename T>
 void convert_bytes_to_array_modulo(byte_t *data, size_t data_size,
                                    T **new_data, size_t *new_size,
-                                   int_t N)
+                                   uint_t N)
 {
     size_t num_len = (hex_num_len(N) + 1) / 2; // 2 hex symbols per byte
     *new_size = data_size / num_len;
@@ -897,6 +1044,23 @@ void convert_bytes_to_array_modulo(byte_t *data, size_t data_size,
                              (((byte_t *)data)[i * num_len + j] & 0xFF);
         }
     }
+}
+
+/// @brief Convert byte array to an array of integers
+/// @tparam T type of the array elements
+/// @param data byte array
+/// @param data_size
+/// @param new_data pointer to the result
+/// @param new_size
+/// @warning The result must be freed after usage
+template <typename T>
+void convert_bytes_to_array(byte_t *data, size_t data_size,
+                            T **new_data, size_t *new_size)
+{
+    *new_size = data_size / sizeof(T);
+    *new_data = ALLOC(T, *new_size);
+    MASSERT(*new_data != NULL, "Memory allocation failed");
+    memcpy(*new_data, data, data_size);
 }
 
 /// @brief Read chunk of data from file
@@ -1023,6 +1187,69 @@ void padd_data_to_chunksize(byte_t **data, size_t *data_size, size_t cap)
     *data_size += padd_size;
 }
 
+void save_bmp_greyscale(float *data, size_t cols, size_t rows, char *filename)
+{
+    FILE *f;
+    unsigned char *img = NULL;
+    int filesize = 54 + 3 * cols * rows;
+    if (img)
+        free(img);
+    img = (unsigned char *)malloc(3 * cols * rows);
+    memset(img, 0, 3 * cols * rows);
+
+    size_t x, y;
+    for (x = 0; x < cols; x++)
+    {
+        for (y = 0; y < rows; y++)
+        {
+            int r = (int)((data[y * cols + x]) * 255);
+            int g = (int)((data[y * cols + x]) * 255);
+            int b = (int)((data[y * cols + x]) * 255);
+            if (r > 255)
+                r = 255;
+            if (g > 255)
+                g = 255;
+            if (b > 255)
+                b = 255;
+            img[(x + y * cols) * 3 + 2] = (unsigned char)(r);
+            img[(x + y * cols) * 3 + 1] = (unsigned char)(g);
+            img[(x + y * cols) * 3 + 0] = (unsigned char)(b);
+        }
+    }
+
+    unsigned char bmpfileheader[14] = {'B', 'M', 0, 0, 0, 0, 0,
+                                       0, 0, 0, 54, 0, 0, 0};
+    unsigned char bmpinfoheader[40] = {40, 0, 0, 0,  // header size
+                                       0, 0, 0, 0,   // width
+                                       0, 0, 0, 0,   // height
+                                       1, 0, 24, 0}; // planes, bits per pixel
+    unsigned char bmppad[3] = {0, 0, 0};
+
+    bmpfileheader[2] = (unsigned char)(filesize);
+    bmpfileheader[3] = (unsigned char)(filesize >> 8);
+    bmpfileheader[4] = (unsigned char)(filesize >> 16);
+    bmpfileheader[5] = (unsigned char)(filesize >> 24);
+
+    bmpinfoheader[4] = (unsigned char)(cols);
+    bmpinfoheader[5] = (unsigned char)(cols >> 8);
+    bmpinfoheader[6] = (unsigned char)(cols >> 16);
+    bmpinfoheader[7] = (unsigned char)(cols >> 24);
+    bmpinfoheader[8] = (unsigned char)(rows);
+    bmpinfoheader[9] = (unsigned char)(rows >> 8);
+    bmpinfoheader[10] = (unsigned char)(rows >> 16);
+    bmpinfoheader[11] = (unsigned char)(rows >> 24);
+
+    f = fopen(filename, "wb");
+    fwrite(bmpfileheader, 1, 14, f);
+    fwrite(bmpinfoheader, 1, 40, f);
+    for (size_t i = 0; i < rows; i++)
+    {
+        fwrite(img + (cols * (rows - i - 1) * 3), 3, cols, f);
+        fwrite(bmppad, 1, (4 - (cols * 3) % 4) % 4, f);
+    }
+    fclose(f);
+}
+
 // ===--- RSA CIPHER ---========================================================
 #define __RSA_CIPHER
 
@@ -1030,7 +1257,7 @@ void padd_data_to_chunksize(byte_t **data, size_t *data_size, size_t cap)
 /// @param p first prime number
 /// @param q second prime number
 /// @return RSA modulo
-int_t rsa_N(int_t p, int_t q)
+uint_t rsa_N(uint_t p, uint_t q)
 {
     MASSERT(is_prime(p), "p must be prime");
     MASSERT(is_prime(q), "q must be prime");
@@ -1041,7 +1268,7 @@ int_t rsa_N(int_t p, int_t q)
 /// @param p first prime number
 /// @param q second prime number
 /// @return RSA t parameter (p - 1) * (q - 1)
-int_t rsa_t(int_t p, int_t q)
+uint_t rsa_t(uint_t p, uint_t q)
 {
     MASSERT(is_prime(p), "p must be prime");
     MASSERT(is_prime(q), "q must be prime");
@@ -1051,10 +1278,10 @@ int_t rsa_t(int_t p, int_t q)
 /// @brief Generate RSA encryption key
 /// @param t RSA t parameter
 /// @return RSA encryption key
-int_t rsa_public_key(int_t t)
+uint_t rsa_public_key(uint_t t)
 {
-    std::vector<int_t> lst;
-    for (int_t i = 2; i < t - 1; i++)
+    std::vector<uint_t> lst;
+    for (uint_t i = 2; i < t - 1; i++)
     {
         if (is_prime(i) && t % i != 0)
         {
@@ -1068,9 +1295,9 @@ int_t rsa_public_key(int_t t)
 /// @param cif_key RSA encryption key
 /// @param t RSA t parameter
 /// @return RSA decryption key
-int_t rsa_private_key(int_t cif_key, int_t t)
+uint_t rsa_private_key(uint_t cif_key, uint_t t)
 {
-    for (int_t i = 1; i < t; i++)
+    for (uint_t i = 1; i < t; i++)
     {
         if ((cif_key * i) % t == 1)
         {
@@ -1087,7 +1314,7 @@ int_t rsa_private_key(int_t cif_key, int_t t)
 /// @param N modulo
 /// @return encrypted data
 template <typename T>
-int_t rsa_encrypt(T x, int_t key, int_t N)
+uint_t rsa_encrypt(T x, uint_t key, uint_t N)
 {
     return pow_mod(x, key, N);
 }
@@ -1103,10 +1330,10 @@ int_t rsa_encrypt(T x, int_t key, int_t N)
 /// @warning The result must be freed after usage
 template <typename T>
 void rsa_encrypt(T *data, size_t data_size,
-                 int_t **cif, size_t *cif_size,
-                 int_t key, int_t N)
+                 uint_t **cif, size_t *cif_size,
+                 uint_t key, uint_t N)
 {
-    int_t *res = ALLOC(int_t, 2 * data_size);
+    uint_t *res = ALLOC(uint_t, 2 * data_size);
     MASSERT(res != NULL, "Memory allocation failed");
 
     for (size_t i = 0; i < data_size; i++)
@@ -1122,7 +1349,7 @@ void rsa_encrypt(T *data, size_t data_size,
 /// @param key RSA decryption key
 /// @param N modulo
 /// @return decrypted data
-int_t rsa_decrypt(int_t x, int_t key, int_t N)
+uint_t rsa_decrypt(uint_t x, uint_t key, uint_t N)
 {
     return pow_mod(x, key, N);
 }
@@ -1137,9 +1364,9 @@ int_t rsa_decrypt(int_t x, int_t key, int_t N)
 /// @param N modulo
 /// @warning The result must be freed after usage
 template <typename T>
-void rsa_decrypt(int_t *cif, size_t cif_size,
+void rsa_decrypt(uint_t *cif, size_t cif_size,
                  T **data, size_t *data_size,
-                 int_t key, int_t N)
+                 uint_t key, uint_t N)
 {
     T *res = ALLOC(T, cif_size);
     MASSERT(res != NULL, "Memory allocation failed");
@@ -1158,7 +1385,7 @@ void rsa_decrypt(int_t *cif, size_t cif_size,
 /// @brief Generate ElGamal session key
 /// @param p modulo
 /// @return ElGamal session key
-int_t __elg_session_key_x(int_t p)
+uint_t __elg_session_key_x(uint_t p)
 {
     return rand() % (p - 1) + 1;
 }
@@ -1168,7 +1395,7 @@ int_t __elg_session_key_x(int_t p)
 /// @param x ElGamal session key
 /// @param p modulo
 /// @return ElGamal y parameter
-int_t __elg_y(int_t g, int_t x, int_t p)
+uint_t __elg_y(uint_t g, uint_t x, uint_t p)
 {
     return pow_mod(g, x, p);
 }
@@ -1176,7 +1403,7 @@ int_t __elg_y(int_t g, int_t x, int_t p)
 /// @brief Make ElGamal private key
 /// @param key_x pointer to the result
 /// @param p modulo
-void elg_private_key(int_t *key_x, int_t p)
+void elg_private_key(uint_t *key_x, uint_t p)
 {
     *key_x = __elg_session_key_x(p);
 }
@@ -1186,7 +1413,7 @@ void elg_private_key(int_t *key_x, int_t p)
 /// @param key_g generator, pointer to the result
 /// @param x ElGamal session key
 /// @param p modulo
-void elg_public_key(int_t *key_y, int_t *key_g, int_t x, int_t p)
+void elg_public_key(uint_t *key_y, uint_t *key_g, uint_t x, uint_t p)
 {
     *key_g = primitive_root_mod(p);
     *key_y = __elg_y(*key_g, x, p);
@@ -1199,9 +1426,9 @@ void elg_public_key(int_t *key_y, int_t *key_g, int_t x, int_t p)
 /// @param key_y ElGamal y parameter
 /// @param key_g generator
 /// @param p modulo
-void elg_encrypt(int_t *a, int_t *b, int_t m, int_t key_y, int_t key_g, int_t p)
+void elg_encrypt(uint_t *a, uint_t *b, uint_t m, uint_t key_y, uint_t key_g, uint_t p)
 {
-    int_t k = __elg_session_key_x(p);
+    uint_t k = __elg_session_key_x(p);
     *a = pow_mod(key_g, k, p);
     *b = (m * pow_mod(key_y, k, p)) % p;
 }
@@ -1215,14 +1442,14 @@ void elg_encrypt(int_t *a, int_t *b, int_t m, int_t key_y, int_t key_g, int_t p)
 /// @param key_g generator
 /// @param p modulo
 /// @warning The result must be freed after usage
-void elg_encrypt(int_t *data, size_t data_size,
-                 int_t **cif, size_t *cif_size,
-                 int_t key_y, int_t key_g, int_t p)
+void elg_encrypt(uint_t *data, size_t data_size,
+                 uint_t **cif, size_t *cif_size,
+                 uint_t key_y, uint_t key_g, uint_t p)
 {
-    int_t *res = ALLOC(int_t, data_size << 1);
+    uint_t *res = ALLOC(uint_t, data_size << 1);
     MASSERT(res != NULL, "Memory allocation failed");
 
-    int_t a, b;
+    uint_t a, b;
     for (size_t i = 0; i < data_size; i++)
     {
         elg_encrypt(&a, &b, data[i], key_y, key_g, p);
@@ -1239,7 +1466,7 @@ void elg_encrypt(int_t *data, size_t data_size,
 /// @param key_x ElGamal session key
 /// @param p modulo
 /// @return decrypted data
-int_t elg_decrypt(int_t a, int_t b, int_t key_x, int_t p)
+uint_t elg_decrypt(uint_t a, uint_t b, uint_t key_x, uint_t p)
 {
     return (b * pow_mod(a, p - 1 - key_x, p)) % p;
 }
@@ -1252,11 +1479,11 @@ int_t elg_decrypt(int_t a, int_t b, int_t key_x, int_t p)
 /// @param key_x ElGamal session key
 /// @param p modulo
 /// @warning The result must be freed after usage
-void elg_dcif(int_t *cif, size_t cif_size,
-              int_t **data, size_t *data_size,
-              int_t key_x, int_t p)
+void elg_dcif(uint_t *cif, size_t cif_size,
+              uint_t **data, size_t *data_size,
+              uint_t key_x, uint_t p)
 {
-    int_t *res = ALLOC(int_t, cif_size >> 1);
+    uint_t *res = ALLOC(uint_t, cif_size >> 1);
     MASSERT(res != NULL, "Memory allocation failed");
 
     for (size_t i = 0; i < cif_size; i += 2)
@@ -1273,7 +1500,7 @@ void elg_dcif(int_t *cif, size_t cif_size,
 /// @brief ElGamal signature k parameter
 /// @param p modulo
 /// @return ElGamal signature k parameter
-int_t __elgsig_k(int_t p)
+uint_t __elgsig_k(uint_t p)
 {
     return coprime(p - 1);
 }
@@ -1283,7 +1510,7 @@ int_t __elgsig_k(int_t p)
 /// @param k ElGamal signature k parameter
 /// @param p modulo
 /// @return ElGamal signature a parameter
-int_t __elgsig_a(int_t g, int_t k, int_t p)
+uint_t __elgsig_a(uint_t g, uint_t k, uint_t p)
 {
     return pow_mod(g, k, p);
 }
@@ -1292,7 +1519,7 @@ int_t __elgsig_a(int_t g, int_t k, int_t p)
 /// @param k ElGamal signature k parameter
 /// @param p modulo
 /// @return ElGamal signature reverse k parameter
-int_t __elgsig_reverse_k(int_t k, int_t p)
+uint_t __elgsig_reverse_k(uint_t k, uint_t p)
 {
     return multiplicative_inverse(k, p - 1);
 }
@@ -1304,9 +1531,9 @@ int_t __elgsig_reverse_k(int_t k, int_t p)
 /// @param a ElGamal signature a parameter
 /// @param p modulo
 /// @return ElGamal signature b parameter
-int_t __elgsig_b(int_t m, int_t k, int_t x, int_t a, int_t p)
+uint_t __elgsig_b(uint_t m, uint_t k, uint_t x, uint_t a, uint_t p)
 {
-    int_t mmod = (__elgsig_reverse_k(k, p) * (m - x * a)) % (p - 1);
+    uint_t mmod = (__elgsig_reverse_k(k, p) * (m - x * a)) % (p - 1);
     // 'C' peculiarity about mod operation:
     return mmod >= 0 ? mmod : mmod + p - 1;
 }
@@ -1318,11 +1545,11 @@ int_t __elgsig_b(int_t m, int_t k, int_t x, int_t a, int_t p)
 /// @param key_g generator
 /// @param p modulo
 /// @param m data
-void elgsig_sign(int_t *a, int_t *b,
-                 int_t key_x, int_t key_g,
-                 int_t p, int_t m)
+void elgsig_sign(uint_t *a, uint_t *b,
+                 uint_t key_x, uint_t key_g,
+                 uint_t p, uint_t m)
 {
-    int_t k = __elgsig_k(p);
+    uint_t k = __elgsig_k(p);
     *a = __elgsig_a(key_g, k, p);
     *b = __elgsig_b(m, k, key_x, *a, p);
 }
@@ -1336,14 +1563,14 @@ void elgsig_sign(int_t *a, int_t *b,
 /// @param key_g generator
 /// @param p modulo
 /// @warning The result must be freed after usage
-void elgsig_sign(int_t *data, size_t data_size,
-                 int_t **cif, size_t *cif_size,
-                 int_t key_y, int_t key_g, int_t p)
+void elgsig_sign(uint_t *data, size_t data_size,
+                 uint_t **cif, size_t *cif_size,
+                 uint_t key_y, uint_t key_g, uint_t p)
 {
-    int_t *res = ALLOC(int_t, data_size << 1);
+    uint_t *res = ALLOC(uint_t, data_size << 1);
     MASSERT(res != NULL, "Memory allocation failed");
 
-    int_t a, b;
+    uint_t a, b;
     for (size_t i = 0; i < data_size; i++)
     {
         elgsig_sign(&a, &b, key_y, key_g, p, data[i]);
@@ -1362,8 +1589,8 @@ void elgsig_sign(int_t *data, size_t data_size,
 /// @param p modulo
 /// @param m data
 /// @return true if the signature is valid, false otherwise
-bool elgsig_check(int_t key_y, int_t key_g,
-                  int_t a, int_t b, int_t p, int_t m)
+bool elgsig_check(uint_t key_y, uint_t key_g,
+                  uint_t a, uint_t b, uint_t p, uint_t m)
 {
     return (pow_mod(key_y, a, p) * pow_mod(a, b, p)) % p == pow_mod(
                                                                 key_g, m, p);
@@ -1378,9 +1605,9 @@ bool elgsig_check(int_t key_y, int_t key_g,
 /// @param data array of data
 /// @param data_size
 /// @return true if the signature is valid, false otherwise
-bool elgsig_check(int_t *cif, size_t cif_size,
-                  int_t key_y, int_t key_g, int_t p,
-                  int_t *data, size_t data_size)
+bool elgsig_check(uint_t *cif, size_t cif_size,
+                  uint_t key_y, uint_t key_g, uint_t p,
+                  uint_t *data, size_t data_size)
 {
     if (cif_size != data_size << 1)
     {
@@ -2117,6 +2344,440 @@ void des_decrypt(byte_t *data, size_t data_size,
     FREE(key_sets);
 }
 
+// ===--- PERLIN NOISE ---======================================================
+#define __PERLIN_NOISE
+
+// ** uncomment if you want the repeatition on
+// ** i.e. want to map the input point co-ordinates to their "local"
+// ** co-ords
+// int rep_amt = <REPEATITION_VALUE_HERE>
+int __pn_rep_amt = -1;
+
+// ✨ Permutation table to calculate the hashes for each corner
+// of the unit cell. This contains ints from 0 to 255 inclusive.
+int __PN_PERM_TABLE[256] = {0x97, 0xA0, 0x89, 0x5B, 0x5A, 0x0F, 0x83, 0x0D,
+                            0xC9, 0x5F, 0x60, 0x35, 0xC2, 0xE9, 0x07, 0xE1,
+                            0x8C, 0x24, 0x67, 0x1E, 0x45, 0x8E, 0x08, 0x63,
+                            0x25, 0xF0, 0x15, 0x0A, 0x17, 0xBE, 0x06, 0x94,
+                            0xF7, 0x78, 0xEA, 0x4B, 0x00, 0x1A, 0xC5, 0x3E,
+                            0x5E, 0xFC, 0xDB, 0xCB, 0x75, 0x23, 0x0B, 0x20,
+                            0x39, 0xB1, 0x21, 0x58, 0xED, 0x95, 0x38, 0x57,
+                            0xAE, 0x14, 0x7D, 0x88, 0xAB, 0xA8, 0x44, 0xAF,
+                            0x4A, 0xA5, 0x47, 0x86, 0x8B, 0x30, 0x1B, 0xA6,
+                            0x4D, 0x92, 0x9E, 0xE7, 0x53, 0x6F, 0xE5, 0x7A,
+                            0x3C, 0xD3, 0x85, 0xE6, 0xDC, 0x69, 0x5C, 0x29,
+                            0x37, 0x2E, 0xF5, 0x28, 0xF4, 0x66, 0x8F, 0x36,
+                            0x41, 0x19, 0x3F, 0xA1, 0x01, 0xD8, 0x50, 0x49,
+                            0xD1, 0x4C, 0x84, 0xBB, 0xD0, 0x59, 0x12, 0xA9,
+                            0xC8, 0xC4, 0x87, 0x82, 0x74, 0xBC, 0x9F, 0x56,
+                            0xA4, 0x64, 0x6D, 0xC6, 0xAD, 0xBA, 0x03, 0x40,
+                            0x34, 0xD9, 0xE2, 0xFA, 0x7C, 0x7B, 0x05, 0xCA,
+                            0x26, 0x93, 0x76, 0x7E, 0xFF, 0x52, 0x55, 0xD4,
+                            0xCF, 0xCE, 0x3B, 0xE3, 0x2F, 0x10, 0x3A, 0x11,
+                            0xB6, 0xBD, 0x1C, 0x2A, 0xDF, 0xB7, 0xAA, 0xD5,
+                            0x77, 0xF8, 0x98, 0x02, 0x2C, 0x9A, 0xA3, 0x46,
+                            0xDD, 0x99, 0x65, 0x9B, 0xA7, 0x2B, 0xAC, 0x09,
+                            0x81, 0x16, 0x27, 0xFD, 0x13, 0x62, 0x6C, 0x6E,
+                            0x4F, 0x71, 0xE0, 0xE8, 0xB2, 0xB9, 0x70, 0x68,
+                            0xDA, 0xF6, 0x61, 0xE4, 0xFB, 0x22, 0xF2, 0xC1,
+                            0xEE, 0xD2, 0x90, 0x0C, 0xBF, 0xB3, 0xA2, 0xF1,
+                            0x51, 0x33, 0x91, 0xEB, 0xF9, 0x0E, 0xEF, 0x6B,
+                            0x31, 0xC0, 0xD6, 0x1F, 0xB5, 0xC7, 0x6A, 0x9D,
+                            0xB8, 0x54, 0xCC, 0xB0, 0x73, 0x79, 0x32, 0x2D,
+                            0x7F, 0x04, 0x96, 0xFE, 0x8A, 0xEC, 0xCD, 0x5D,
+                            0xDE, 0x72, 0x43, 0x1D, 0x18, 0x48, 0xF3, 0x8D,
+                            0x80, 0xC3, 0x4E, 0x42, 0xD7, 0x3D, 0x9C, 0xB4};
+
+// Permutation table to calculate the hashes for each corner
+int __pn_P[512];
+
+// Flag to check if the permutation table exists
+int __pn_perm_flag = 0;
+
+/// @brief Initialize the permutation table with the default values
+void pn_init_default()
+{
+    // double the permutation to avoid overflow
+    for (int idx = 0; idx < 256; idx++)
+    {
+        __pn_P[256 + idx] = __pn_P[idx] = __PN_PERM_TABLE[idx];
+    }
+    // permtable created
+    __pn_perm_flag = 1;
+}
+
+/// @brief Initialize the permutation table with random values
+void pn_init_rand()
+{
+    // double the permutation to avoid overflow
+    for (int idx = 0; idx < 256; idx++)
+    {
+        __pn_P[256 + idx] = __pn_P[idx] = rand() % 256;
+    }
+    // permtable created
+    __pn_perm_flag = 1;
+}
+
+/// @brief Initialize the permutation table with the given values
+/// @param perm_table The permutation table to initialize with,
+/// must be of size 256
+void pn_init(byte_t *perm_table)
+{
+    // double the permutation to avoid overflow
+    for (int idx = 0; idx < 256; idx++)
+    {
+        __pn_P[256 + idx] = __pn_P[idx] = (int)perm_table[idx];
+    }
+    // permtable created
+    __pn_perm_flag = 1;
+}
+
+/// @brief Linearly interpolate between the lo and hi values,
+/// priority given by the param t
+/// @param lo lower bound
+/// @param hi upper bound
+/// @param t priority value
+/// @return float interpolated value
+float __lerp(float lo, float hi, float t)
+{
+    return lo + t * (hi - lo);
+}
+
+/// @brief Calculate the dot product between the random chosen gradient vector
+/// and the distance vector
+/// @param hash The hash value to choose the gradient vector
+/// @param x_comp x component of the distance vector
+/// @param y_comp y component of the distance vector
+/// @param z_comp z component of the distance vector
+/// @return float dot product value
+float __pn_grad(int hash, float x_comp, float y_comp, float z_comp)
+{
+    // use the first 4 bits of the hash to generate 12 random vectors
+    // and "dot" them with (x_comp, y_comp, z_comp)
+
+    int h = hash & 0xF;
+    float w = h < 8 /* 0b1000 */
+                  ? x_comp
+                  : y_comp;
+
+    float t = h < 4 /* 0b100 */
+                  ? y_comp
+                  : (h == 12 || h == 14
+                         ? x_comp
+                         : z_comp);
+
+    // from the first two bits decide if w or t are positive or negative
+    return ((h & 1) == 0 ? w : -w) + ((h & 2) == 0 ? t : -t);
+}
+
+/// @brief Fade function to smooth the interpolation, which has slope of zero
+/// as it reaches the extremes 0 or 1. This is for the smoothness in the noise
+/// value while interpolating
+/// @param tf The input value to fade
+/// @return float The faded value
+float __pn_fadefunc(float tf)
+{
+    return tf * tf * tf * (tf * (6 * tf - 15) + 10);
+}
+
+/// @brief Increment the number and wrap around the repeatition amount
+/// @param num The number to increment
+/// @return int The incremented number
+int __pn_rep_inc(int num)
+{
+    num++;
+    num = __pn_rep_amt > 0 ? num % __pn_rep_amt : num;
+    return num;
+}
+
+/// @brief Calculate the hashes of all the unit cell co-ords
+/// @param xi The x co-ordinate of the unit cell
+/// @param yi The y co-ordinate of the unit cell
+/// @param zi The z co-ordinate of the unit cell
+/// @return int* Stores the hashes into the hash_arr and returns a pointer
+/// to the array
+int *__pn_hash(int xi, int yi, int zi)
+{
+    int *hash_arr = ALLOC(int, 8);
+    /*
+      > There will be 8 hashes for each cell point.
+        Here's the mapping:
+
+        [0] : "aaa"
+        [1] : "baa"
+        [2] : "bba"
+        [3] : "aba"
+        [4] : "aab"
+        [5] : "bab"
+        [6] : "bbb"
+        [7] : "abb"
+    */
+    hash_arr[0] /*aaa*/ = __pn_P[__pn_P[__pn_P[xi] + yi] + zi];
+    hash_arr[1] /*baa*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] + yi] + zi];
+    hash_arr[2] /*bba*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] +
+                                        __pn_rep_inc(yi)] +
+                                 zi];
+    hash_arr[3] /*aba*/ = __pn_P[__pn_P[__pn_P[xi] + __pn_rep_inc(yi)] + zi];
+    hash_arr[4] /*aab*/ = __pn_P[__pn_P[__pn_P[xi] + yi] + __pn_rep_inc(zi)];
+    hash_arr[5] /*bab*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] + yi] +
+                                 __pn_rep_inc(zi)];
+    hash_arr[6] /*bbb*/ = __pn_P[__pn_P[__pn_P[__pn_rep_inc(xi)] +
+                                        __pn_rep_inc(yi)] +
+                                 __pn_rep_inc(zi)];
+    hash_arr[7] /*abb*/ = __pn_P[__pn_P[__pn_P[xi] + __pn_rep_inc(yi)] +
+                                 __pn_rep_inc(zi)];
+
+    return hash_arr;
+}
+
+/// @brief Generate the perlin noise value for the input co-ordinates
+/// if repeat is on, make sure the input co-ordinate map to their "local"
+/// co-ordinates i.e. make sure the co-ordinates wrap-around
+/// @param inp_x The x co-ordinate of the input point
+/// @param inp_y The y co-ordinate of the input point
+/// @param inp_z The z co-ordinate of the input point
+/// @return float The perlin noise value
+float pn_noise(float inp_x, float inp_y, float inp_z)
+{
+    float x = inp_x;
+    float y = inp_y;
+    float z = inp_z;
+    // the *i represent the co-ordinates of the unit cell in which
+    // our input point is located.
+    // the *f represent the relative co-ordinates of input point
+    // relative to the unit cell i.e. (0.5, 0.5, 0.5) will be at the center
+    // of the unit cell
+    int xi, yi, zi;
+    float xf, yf, zf;
+    float u, v, w; // for fading the *f values
+
+    if (__pn_rep_amt > 0)
+    {
+        x = remainderf(x, (float)__pn_rep_amt);
+        y = remainderf(y, (float)__pn_rep_amt);
+        z = remainderf(z, (float)__pn_rep_amt);
+    }
+
+    // init the *i and *f
+    // the *i are bound to 255 to avoid overflow while creating the hashes i.e.
+    // accessing the P[] array
+    xi = (int)x & 255;
+    yi = (int)y & 255;
+    zi = (int)z & 255;
+
+    xf = x - (int)x;
+    yf = y - (int)y;
+    zf = z - (int)z;
+
+    // fade the *f for smoother interpolation
+    u = __pn_fadefunc(xf);
+    v = __pn_fadefunc(yf);
+    w = __pn_fadefunc(zf);
+
+    // get the hashes of all the unit cell co-ords
+    int *hashes = __pn_hash(xi, yi, zi);
+
+    // calculate the dot product between the gradient vectors
+    // and the distance vectors and linearly interpolate between them
+    // ...
+
+    float x1 = __lerp(__pn_grad(hashes[0], xf, yf, zf),
+                      __pn_grad(hashes[1], xf - 1, yf, zf), u);
+
+    float x2 = __lerp(__pn_grad(hashes[3], xf, yf - 1, zf),
+                      __pn_grad(hashes[2], xf - 1, yf - 1, zf), u);
+
+    float y1 = __lerp(x1, x2, v); // 1
+
+    // no need to redefine can overwrite the previously
+    // "lerp-ed" values safely
+    x1 = __lerp(__pn_grad(hashes[4], xf, yf, zf - 1),
+                __pn_grad(hashes[5], xf - 1, yf, zf - 1), u);
+
+    x2 = __lerp(__pn_grad(hashes[7], xf, yf - 1, zf - 1),
+                __pn_grad(hashes[6], xf - 1, yf - 1, zf - 1), u);
+
+    float y2 = __lerp(x1, x2, v); // 2
+
+    FREE(hashes);
+
+    // lerp the two y values and map em in the range [0, 1]
+    return (__lerp(y1, y2, w) + 1) / 2;
+}
+
+/// @brief Generate more "noisy" noise using octaves
+/// this is done by adding contributions of the noise function
+/// iteratively and changing the amplitude and frequency of inputs
+/// @param inp_x The x co-ordinate of the input point
+/// @param inp_y The y co-ordinate of the input point
+/// @param inp_z The z co-ordinate of the input point
+/// @param octaves The number of octaves to generate
+/// @return float The perlin noise value
+float pn_octave_noise(float inp_x, float inp_y, float inp_z, int octaves)
+{
+    // The octave count and the persistance of each octave
+    int octaveCount = octaves;
+    float mulFreq = 2.f;
+    float persistance = .5f;
+    // "summed" noise, frequency and the max amplitude
+    float noiseSum = 0.f;
+    float currFreq = 1.f;
+    float maxAmp = 0.f;
+    float currAmp = 1.0f;
+
+    // iterate through the octaves
+    for (int i = 0; i < octaveCount; i++)
+    {
+        float currNoise = pn_noise(inp_x * currFreq,
+                                   inp_y * currFreq,
+                                   inp_z * currFreq) *
+                          currAmp;
+        noiseSum += currNoise;
+        // resultant value will be in range [0, 1]
+        maxAmp += currAmp;
+        // increase the freq and decrease the amplitude
+        currFreq *= mulFreq;
+        currAmp *= persistance;
+    }
+    // map value in range [0, 1]
+    return (noiseSum / maxAmp);
+}
+
+/// @brief Generate 1D perlin noise
+/// @param data array to store the noise values
+/// @param size size of the array
+/// @param inc increment value
+void pn_noise_1d(float *data, int size, float inc)
+{
+    float xoff = 0.f;
+    for (int x = 0; x < size; x++)
+    {
+        data[x] = pn_noise(xoff, 0, 0);
+        xoff += inc;
+    }
+}
+
+/// @brief Generate 2D perlin noise
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param inc increment value
+void pn_noise_2d(float *data, int rows, int cols, float inc)
+{
+    // xoff and yoff for 2-D generation
+    float xoff = 0.f, yoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            data[x * cols + y] = pn_noise(xoff, yoff, 0);
+            yoff += inc;
+        }
+    }
+}
+
+/// @brief Generate 3D perlin noise
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param depth
+/// @param inc increment value
+void pn_noise_3d(float *data, int rows, int cols, int depth, float inc)
+{
+    // xoff, yoff and zoff for 3-D generation
+    float xoff = 0.f, yoff = 0.f, zoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            yoff += inc;
+            zoff = 0; // for every yoff, zoff starts at zero
+            for (int z = 0; z < depth; z++)
+            {
+                data[x * cols * depth + y * depth + z] =
+                    pn_noise(xoff, yoff, zoff);
+                zoff += inc;
+            }
+        }
+    }
+}
+
+/// @brief Generate 1D perlin noise with octaves
+/// @param data array to store the noise values
+/// @param size
+/// @param inc increment value
+/// @param octaves number of octaves
+void pn_octave_noise_1d(float *data, int size, float inc, int octaves)
+{
+    float xoff = 0.f;
+    for (int x = 0; x < size; x++)
+    {
+        data[x] = pn_octave_noise(xoff, 0, 0, octaves);
+        xoff += inc;
+    }
+}
+
+/// @brief Generate 2D perlin noise with octaves
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param inc increment value
+/// @param octaves number of octaves
+void pn_octave_noise_2d(float *data, int rows, int cols,
+                        float inc, int octaves)
+{
+    // xoff and yoff for 2-D generation
+    float xoff = 0.f, yoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            data[x * cols + y] = pn_octave_noise(xoff, yoff, 0, octaves);
+            yoff += inc;
+        }
+    }
+}
+
+/// @brief Generate 3D perlin noise with octaves
+/// @param data array to store the noise values
+/// @param rows
+/// @param cols
+/// @param depth
+/// @param inc increment value
+/// @param octaves number of octaves
+void pn_octave_noise_3d(float *data, int rows, int cols, int depth,
+                        float inc, int octaves)
+{
+    // xoff, yoff and zoff for 3-D generation
+    float xoff = 0.f, yoff = 0.f, zoff = 0.f;
+
+    for (int x = 0; x < rows; x++)
+    {
+        xoff += inc;
+        yoff = 0; // for every xoff, yoff starts at zero
+        for (int y = 0; y < cols; y++)
+        {
+            yoff += inc;
+            zoff = 0; // for every yoff, zoff starts at zero
+            for (int z = 0; z < depth; z++)
+            {
+                data[x * cols * depth + y * depth + z] =
+                    pn_octave_noise(xoff, yoff, zoff, octaves);
+                zoff += inc;
+            }
+        }
+    }
+}
+
 // ===--- BENCHMARKS ---========================================================
 #define __BENCHMARKS
 
@@ -2124,17 +2785,17 @@ void rsa_bench()
 {
     std::cout << "RSA BENCHMARK: ";
     auto bench_time = GET_CURR_TIME;
-    int_t epochs = 200;
-    int_t enc_epochs = 2000;
-    int_t p = 257; // 257
-    int_t q = 503; // 503
+    uint_t epochs = 200;
+    uint_t enc_epochs = 2000;
+    uint_t p = 257; // 257
+    uint_t q = 503; // 503
 
     MASSERT(is_prime(p) && is_prime(q), "p and q must be prime");
-    int_t _N = rsa_N(p, q);
-    int_t _t = rsa_t(p, q);
+    uint_t _N = rsa_N(p, q);
+    uint_t _t = rsa_t(p, q);
     auto time = GET_CURR_TIME;
-    int_t cif;
-    for (int_t i = 0; i < epochs; i++)
+    uint_t cif;
+    for (uint_t i = 0; i < epochs; i++)
     {
         cif = rsa_public_key(_t);
     }
@@ -2150,8 +2811,8 @@ void rsa_bench()
     }
 
     time = GET_CURR_TIME;
-    int_t dcif;
-    for (int_t i = 0; i < epochs; i++)
+    uint_t dcif;
+    for (uint_t i = 0; i < epochs; i++)
     {
         dcif = rsa_private_key(cif, _t);
     }
@@ -2160,10 +2821,10 @@ void rsa_bench()
     auto rsa_dcif_t = GET_TIME_DIFF(time, GET_CURR_TIME);
 #endif // TESTS_VERBOSE
 
-    int_t num = 123;
+    uint_t num = 123;
     time = GET_CURR_TIME;
-    int_t encd;
-    for (int_t i = 0; i < enc_epochs; i++)
+    uint_t encd;
+    for (uint_t i = 0; i < enc_epochs; i++)
     {
         encd = rsa_encrypt(num, cif, _N);
     }
@@ -2173,8 +2834,8 @@ void rsa_bench()
 #endif // TESTS_VERBOSE
 
     time = GET_CURR_TIME;
-    int_t decd;
-    for (int_t i = 0; i < enc_epochs; i++)
+    uint_t decd;
+    for (uint_t i = 0; i < enc_epochs; i++)
     {
         decd = rsa_decrypt(encd, dcif, _N);
     }
@@ -2192,46 +2853,46 @@ void rsa_bench()
     printf("cif\t\xB3");
     std::cout << cif << std::endl;
     printf("c_key_t\t\xB3%.6fms\n",
-           float(rsa_cif_t) / 1000000 / epochs);
+           float(rsa_cif_t) / 1 / epochs);
     printf("dcif\t\xB3");
     std::cout << dcif << std::endl;
     printf("d_key_t\t\xB3%.6fms\n",
-           float(rsa_dcif_t) / 1000000 / epochs);
+           float(rsa_dcif_t) / 1 / epochs);
     printf("sum_t\t\xB3%.6fms\n",
-           float(rsa_dcif_t + rsa_cif_t) / 1000000 / epochs);
+           float(rsa_dcif_t + rsa_cif_t) / 1 / epochs);
     printf("\nnum\t\xB3");
     std::cout << num << std::endl;
     printf("enc\t\xB3");
     std::cout << encd << std::endl;
     printf("enc_t\t\xB3%.6fms\n",
-           float(encd_t) / 1000000 / enc_epochs);
+           float(encd_t) / 1 / enc_epochs);
     printf("dec\t\xB3");
     std::cout << decd << std::endl;
     printf("dec_t\t\xB3%.6fms\n",
-           float(decd_t) / 1000000 / enc_epochs);
+           float(decd_t) / 1 / enc_epochs);
     printf("sum_t\t\xB3%.6fms\n",
-           float(decd_t + encd_t) / 1000000 / enc_epochs);
+           float(decd_t + encd_t) / 1 / enc_epochs);
 #endif // TESTS_VERBOSE
     bool res = decd == num;
-    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(GET_TIME_DIFF(bench_time, GET_CURR_TIME)) / 1000000);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(GET_TIME_DIFF(bench_time, GET_CURR_TIME)) / 1);
 }
 
 void elg_bench()
 {
     std::cout << "ELG BENCHMARK: ";
     srand(time(0));
-    int_t p = 503;
-    int_t m = 20;
+    uint_t p = 503;
+    uint_t m = 20;
     MASSERT(is_prime(p), "p must be prime");
     MASSERT(m <= p, "m must be less than p");
 
-    int pr_k_iter = 20000000;
+    int pr_k_iter = 20;
     int pu_k_iter = 2000;
     int cif_iter = 20000;
     int dcif_iter = 20000;
 
     auto total_start = GET_CURR_TIME;
-    int_t key_x, key_y, key_g, a, b, decd;
+    uint_t key_x, key_y, key_g, a, b, decd;
 
 #ifdef TESTS_VERBOSE
     auto time = GET_CURR_TIME;
@@ -2283,7 +2944,7 @@ void elg_bench()
     printf("\nprivate key:\nx\t\xB3");
     std::cout << key_x << std::endl;
     printf("pr_k_t\t\xB3%.6fms\n",
-           float(pr_k_time) / 1000000 / pr_k_iter);
+           float(pr_k_time) / 1 / pr_k_iter);
     printf("\npublic key:\ny\t\xB3");
     std::cout << key_y << std::endl;
     printf("g\t\xB3");
@@ -2291,37 +2952,37 @@ void elg_bench()
     printf("p\t\xB3");
     std::cout << p << std::endl;
     printf("pu_k_t\t\xB3%.6fms\n",
-           float(pu_k_time) / 1000000 / pu_k_iter);
+           float(pu_k_time) / 1 / pu_k_iter);
     printf("\ncif:\na\t\xB3");
     std::cout << a << std::endl;
     printf("b\t\xB3");
     std::cout << b << std::endl;
     printf("cif_t\t\xB3%.6fms\n",
-           float(cif_time) / 1000000 / cif_iter);
+           float(cif_time) / 1 / cif_iter);
     printf("\ndec:\t\xB3");
     std::cout << decd << std::endl;
     printf("dec_t\t\xB3%.6fms\n",
-           float(decd_t) / 1000000 / dcif_iter);
+           float(decd_t) / 1 / dcif_iter);
 #endif // TESTS_VERBOSE
 
     bool res = decd == m;
-    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1000000);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1);
 }
 
 void elgsig_bench()
 {
     std::cout << "ELGSIG BENCHMARK: ";
 
-    int pr_k_iter = 20000000;
+    int pr_k_iter = 20;
     int pu_k_iter = 2000;
     int sig_iter = 20000;
 
-    int_t p = 503;
-    int_t m = 20;
+    uint_t p = 503;
+    uint_t m = 20;
 
     MASSERT(is_prime(p), "p must be prime");
 
-    int_t key_x, key_y, key_g, a, b;
+    uint_t key_x, key_y, key_g, a, b;
     auto total_start = GET_CURR_TIME;
 #ifdef TESTS_VERBOSE
     auto time = GET_CURR_TIME;
@@ -2361,7 +3022,7 @@ void elgsig_bench()
     printf("\nprivate key:\nx\t\xB3");
     std::cout << key_x << std::endl;
     printf("pr_k_t\t\xB3%.6fms\n",
-           float(pr_k_time) / 1000000 / pr_k_iter);
+           float(pr_k_time) / 1 / pr_k_iter);
     printf("\npublic key:\ny\t\xB3");
     std::cout << key_y << std::endl;
     printf("g\t\xB3");
@@ -2369,17 +3030,17 @@ void elgsig_bench()
     printf("p\t\xB3");
     std::cout << p << std::endl;
     printf("pu_k_t\t\xB3%.6fms\n",
-           float(pu_k_time) / 1000000 / pu_k_iter);
+           float(pu_k_time) / 1 / pu_k_iter);
     printf("\nsig:\na\t\xB3");
     std::cout << a << std::endl;
     printf("b\t\xB3");
     std::cout << b << std::endl;
     printf("sig_t\t\xB3%.6fms\n",
-           float(sig_time) / 1000000 / sig_iter);
+           float(sig_time) / 1 / sig_iter);
 
 #endif // TESTS_VERBOSE
     bool res = elgsig_check(key_y, key_g, a, b, p, m);
-    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1000000);
+    printf(res ? PASSED_TIME_FMT : FAILED_STR, float(total_t) / 1);
 }
 
 // ===--- TESTS ---=============================================================
@@ -2395,19 +3056,19 @@ void test_elgsig_array(){};
 
 void test_rsa_array()
 {
-    int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    uint_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     size_t data_size = sizeof(data) / sizeof(data[0]);
-    int_t *cif = NULL;
+    uint_t *cif = NULL;
     size_t cif_size;
-    int_t *dec = NULL;
+    uint_t *dec = NULL;
     size_t dec_size;
 
-    int_t p = 13;
-    int_t q = 113;
-    int_t N = rsa_N(p, q);
-    int_t t = rsa_t(p, q);
-    int_t cif_key = rsa_public_key(t);
-    int_t dcif_key = rsa_private_key(cif_key, t);
+    uint_t p = 13;
+    uint_t q = 113;
+    uint_t N = rsa_N(p, q);
+    uint_t t = rsa_t(p, q);
+    uint_t cif_key = rsa_public_key(t);
+    uint_t dcif_key = rsa_private_key(cif_key, t);
 
     printf("TEST RSA ARRAY: ");
     rsa_encrypt(data, data_size, &cif, &cif_size, cif_key, N);
@@ -2442,16 +3103,16 @@ void test_rsa_array()
 
 void test_elg_array()
 {
-    int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    uint_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     size_t data_size = sizeof(data) / sizeof(data[0]);
-    int_t *cif = NULL;
+    uint_t *cif = NULL;
     size_t cif_size;
-    int_t *dec = NULL;
+    uint_t *dec = NULL;
     size_t dec_size;
 
-    int_t p = 503;
+    uint_t p = 503;
 
-    int_t key_x, key_y, key_g;
+    uint_t key_x, key_y, key_g;
 
     elg_private_key(&key_x, p);
     elg_public_key(&key_y, &key_g, key_x, p);
@@ -2484,14 +3145,14 @@ void test_elg_array()
 
 void test_elgsig_array()
 {
-    int_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    uint_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     size_t data_size = sizeof(data) / sizeof(data[0]);
-    int_t *cif = NULL;
+    uint_t *cif = NULL;
     size_t cif_size;
 
-    int_t p = 503;
+    uint_t p = 503;
 
-    int_t key_x, key_y, key_g;
+    uint_t key_x, key_y, key_g;
 
     elg_private_key(&key_x, p);
     elg_public_key(&key_y, &key_g, key_x, p);
@@ -2577,10 +3238,10 @@ void test_des()
 void main_case_rsa_genkey()
 {
     printf(RSA_STR);
-    int_t cif_key;
-    int_t dcif_key;
+    uint_t cif_key;
+    uint_t dcif_key;
     printf("First prime number (p): ");
-    int_t p;
+    uint_t p;
     std::cin >> p;
     if (p == 0)
     {
@@ -2589,7 +3250,7 @@ void main_case_rsa_genkey()
         printf("Random prime number (p): %lld\n", (int64_t)p);
     }
     printf("Second prime number (q): ");
-    int_t q;
+    uint_t q;
     std::cin >> q;
     if (q == 0)
     {
@@ -2598,8 +3259,8 @@ void main_case_rsa_genkey()
         printf("Random prime number (q): %lld\n", (int64_t)q);
     }
 
-    int_t N = rsa_N(p, q);
-    int_t t = rsa_t(p, q);
+    uint_t N = rsa_N(p, q);
+    uint_t t = rsa_t(p, q);
     cif_key = rsa_public_key(t);
     dcif_key = rsa_private_key(cif_key, t);
     std::cout << "N (DEC): " << N << std::endl;
@@ -2613,15 +3274,19 @@ void main_case_rsa_encrypt()
 {
     printf(RSA_STR);
     printf("Public key (DEC): ");
-    int_t cif_key;
+    uint_t cif_key;
     std::cin >> cif_key;
     printf("N (DEC): ");
-    int_t N;
+    uint_t N;
     std::cin >> N;
     std::string input_str;
+    std::cout << "Use shuffling? (y/n): ";
+    char shuf;
+    std::cin >> shuf;
+
     std::cout << "Enter sequence to encrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2631,10 +3296,18 @@ void main_case_rsa_encrypt()
     {
         parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
     }
-    int_t *cif = NULL;
+
+    uint_t *cif = NULL;
     size_t cif_size;
     rsa_encrypt(data, data_size, &cif, &cif_size, cif_key, N);
+
+    if (shuf == 'y')
+    {
+        type_shuffle(cif, cif_size);
+    }
+
     char *str_buf;
+    // TODO: fix error when int is bigger than N
     swrite_dec_modulo(cif, cif_size, N, &str_buf);
     std::cout << C_CYAN "Encrypted sequence:" C_RESET " \n"
               << str_buf << std::endl;
@@ -2646,21 +3319,31 @@ void main_case_rsa_decrypt()
 {
     printf(RSA_STR);
     printf("Private key (DEC): ");
-    int_t prvt_key;
+    uint_t prvt_key;
     std::cin >> prvt_key;
     printf("N (DEC): ");
-    int_t N;
+    uint_t N;
     std::cin >> N;
     std::string input_str;
+    std::cout << "Use shuffling? (y/n): ";
+    char shuf;
+    std::cin >> shuf;
     std::cout << "Enter sequence to decrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     sread_dec_modulo((char *)input_str.c_str(), &data, &data_size, N);
-    int_t *dcif = NULL;
+
+    if (shuf == 'y')
+    {
+        type_unshuffle(data, data_size);
+    }
+
+    uint_t *dcif = NULL;
     size_t dcif_size;
     rsa_decrypt(data, data_size, &dcif, &dcif_size, prvt_key, N);
     std::cout << C_CYAN "Decrypted sequence (DEC):" C_RESET " \n";
+
     print_array(dcif, dcif_size);
     if (is_array_ascii(dcif, dcif_size))
     {
@@ -2677,8 +3360,8 @@ void main_case_rsa_decrypt()
 void main_case_elg_genkey()
 {
     printf(ELGAMAL_STR);
-    int_t key_x, key_y, key_g;
-    int_t p;
+    uint_t key_x, key_y, key_g;
+    uint_t p;
     printf("N (DEC): ");
     std::cin >> p;
     if (p == 0)
@@ -2699,18 +3382,21 @@ void main_case_elg_encrypt()
 {
     printf(ELGAMAL_STR);
     printf("Public key (y, DEC): ");
-    int_t key_y;
+    uint_t key_y;
     std::cin >> key_y;
     printf("Generator (g, DEC): ");
-    int_t key_g;
+    uint_t key_g;
     std::cin >> key_g;
     printf("N (DEC): ");
-    int_t p;
+    uint_t p;
     std::cin >> p;
     std::string input_str;
+    std::cout << "Use shuffling? (y/n): ";
+    char shuf;
+    std::cin >> shuf;
     std::cout << "Enter sequence to encrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2720,10 +3406,15 @@ void main_case_elg_encrypt()
     {
         parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
     }
-    int_t *cif = NULL;
+    if (shuf == 'y')
+    {
+        type_shuffle(data, data_size);
+    }
+    uint_t *cif = NULL;
     size_t cif_size;
     elg_encrypt(data, data_size, &cif, &cif_size, key_y, key_g, p);
     char *str_buf = NULL;
+    // TODO: fix error when int is bigger than N
     swrite_dec_modulo(cif, cif_size, p, &str_buf);
     std::cout << C_CYAN "Encrypted sequence:" C_RESET " \n"
               << str_buf << std::endl;
@@ -2735,20 +3426,27 @@ void main_case_elg_decrypt()
 {
     printf(ELGAMAL_STR);
     printf("Private key (x, DEC): ");
-    int_t prvt_key;
+    uint_t prvt_key;
     std::cin >> prvt_key;
     printf("N (DEC): ");
-    int_t p;
+    uint_t p;
     std::cin >> p;
     std::string input_str;
+    std::cout << "Use shuffling? (y/n): ";
+    char shuf;
+    std::cin >> shuf;
     std::cout << "Enter sequence to decrypt:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     sread_dec_modulo((char *)input_str.c_str(), &data, &data_size, p);
-    int_t *dcif = NULL;
+    uint_t *dcif = NULL;
     size_t dcif_size;
     elg_dcif(data, data_size, &dcif, &dcif_size, prvt_key, p);
+    if (shuf == 'y')
+    {
+        type_unshuffle(dcif, dcif_size);
+    }
     std::cout << C_CYAN "Decrypted sequence (DEC):" C_RESET " \n";
     print_array(dcif, dcif_size);
     if (is_array_ascii(dcif, dcif_size))
@@ -2766,8 +3464,8 @@ void main_case_elg_decrypt()
 void main_case_elgsig_genkey()
 {
     printf(ELGSIG_STR);
-    int_t key_x, key_y, key_g;
-    int_t p;
+    uint_t key_x, key_y, key_g;
+    uint_t p;
     printf("N (DEC): ");
     std::cin >> p;
     if (p == 0)
@@ -2788,18 +3486,18 @@ void main_case_elgsig_sign()
 {
     printf(ELGSIG_STR);
     printf("Private key (x, DEC): ");
-    int_t key_x;
+    uint_t key_x;
     std::cin >> key_x;
     printf("Generator (g, DEC): ");
-    int_t key_g;
+    uint_t key_g;
     std::cin >> key_g;
     printf("N (DEC): ");
-    int_t p;
+    uint_t p;
     std::cin >> p;
     std::string input_str;
     std::cout << "Enter sequence to sign:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2809,7 +3507,7 @@ void main_case_elgsig_sign()
     {
         parse_str_to_ints((char *)input_str.c_str(), &data, &data_size);
     }
-    int_t *cif = NULL;
+    uint_t *cif = NULL;
     size_t cif_size;
     elgsig_sign(data, data_size, &cif, &cif_size, key_x, key_g, p);
     char *str_buf = NULL;
@@ -2824,18 +3522,18 @@ void main_case_elgsig_check()
 {
     printf(ELGSIG_STR);
     printf("Public key (y, DEC): ");
-    int_t key_y;
+    uint_t key_y;
     std::cin >> key_y;
     printf("Generator (g, DEC): ");
-    int_t key_g;
+    uint_t key_g;
     std::cin >> key_g;
     printf("N (DEC): ");
-    int_t p;
+    uint_t p;
     std::cin >> p;
     std::string input_str;
     std::cout << "Enter sequence to check:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     if (is_str_contains_alpha((char *)input_str.c_str()))
     {
@@ -2847,9 +3545,10 @@ void main_case_elgsig_check()
     }
     std::cout << "Enter signature:\n";
     std::getline(std::cin >> std::ws, input_str);
-    int_t *cif = NULL;
+    uint_t *cif = NULL;
     size_t cif_size;
     sread_dec_modulo((char *)input_str.c_str(), &cif, &cif_size, p);
+    // TODO: fix random errors (probably with overflow, appears with N > 0xFF)
     bool res = elgsig_check(cif, cif_size, key_y, key_g, p, data, data_size);
     std::cout << (res ? C_GREEN "Signature is valid" C_RESET " "
                       : C_RED "Signature is NOT valid" C_RESET " ")
@@ -2881,11 +3580,14 @@ void main_case_des_encrypt()
     byte_t *key = NULL;
     size_t key_size;
     parse_hex_str(&key, &key_size, (char *)key_str.c_str());
+    char shuf;
+    std::cout << "Use shuffling? (y/n): ";
+    std::cin >> shuf;
     printf("Enter sequence to encrypt:\n");
     std::string input_str;
     std::getline(std::cin >> std::ws, input_str);
 
-    int_t *data = NULL;
+    uint_t *data = NULL;
     size_t data_size;
     byte_t *bdata = NULL;
     size_t bdata_size;
@@ -2901,6 +3603,11 @@ void main_case_des_encrypt()
         to_byte_array(data, data_size, &bdata, &bdata_size);
     }
     padd_data_to_chunksize(&bdata, &bdata_size, 8);
+
+    if (shuf == 'y')
+    {
+        type_shuffle(bdata, bdata_size);
+    }
 
     size_t cif_size;
     byte_t *cif = ALLOC(byte_t, bdata_size);
@@ -2926,6 +3633,9 @@ void main_case_des_decrypt()
     byte_t *key = NULL;
     size_t key_size;
     parse_hex_str(&key, &key_size, (char *)key_str.c_str());
+    char shuf;
+    std::cout << "Use shuffling? (y/n): ";
+    std::cin >> shuf;
     printf("Enter sequence to decrypt (HEX):\n");
     std::string input_str;
     std::getline(std::cin >> std::ws, input_str);
@@ -2939,6 +3649,12 @@ void main_case_des_decrypt()
     MASSERT(dec != NULL, "Memory allocation error");
     // TODO: rewrite decr func to accept pointer, not reference
     des_decrypt(data, data_size, dec, &dec_size, key);
+
+    if (shuf == 'y')
+    {
+        type_unshuffle(dec, dec_size);
+    }
+
     std::cout << C_CYAN "Decrypted sequence (HEX):" C_RESET " \n";
     print_array_hex_line(dec, dec_size);
     printf("\n");
@@ -3190,6 +3906,29 @@ void main_interface()
 /// @brief Debug function
 void dev_func()
 {
+    int rows = 1024;
+    int cols = 1024;
+    float *data = ALLOC(float, rows *cols);
+
+    pn_init_rand();
+    pn_octave_noise_2d(data, rows, cols, 0.01, 8);
+
+    // print min max
+    float min = data[0];
+    float max = data[0];
+    for (int i = 0; i < rows * cols; i++)
+    {
+        if (data[i] < min)
+            min = data[i];
+        if (data[i] > max)
+            max = data[i];
+    }
+    printf("Min: %f, Max: %f\n", min, max);
+
+    save_bmp_greyscale((float *)data, cols, rows,
+                       (char *)"build/perlin_noise.bmp");
+
+    FREE(data);
 }
 
 // ===--- </DEV> ---============================================================
@@ -3326,10 +4065,10 @@ int main(int argc, const char **argv)
         byte_t *data = NULL;
         size_t data_size;
 
-        int_t *data_int = NULL;
+        uint_t *data_int = NULL;
         size_t data_int_size;
 
-        int_t *cif = NULL;
+        uint_t *cif = NULL;
         size_t cif_size;
 
         byte_t *dcif = NULL;
@@ -3448,11 +4187,11 @@ int main(int argc, const char **argv)
                         print_array_hex(data, data_size);
                     }
 
-                    convert_bytes_to_array_modulo<int_t>(data,
-                                                         data_size,
-                                                         &data_int,
-                                                         &data_int_size,
-                                                         atoi(ring));
+                    convert_bytes_to_array_modulo<uint_t>(data,
+                                                          data_size,
+                                                          &data_int,
+                                                          &data_int_size,
+                                                          atoi(ring));
                     if (log_verbose_lvl)
                     {
                         printf("Data int: ");
