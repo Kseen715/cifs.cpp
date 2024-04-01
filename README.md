@@ -4,12 +4,7 @@
 </p>
 
 ## Description
-`cifs.cpp` is a demonstration of an encryption/decryption algorithms. Written with C++ in C-style.
-
-Implemented algorithms:
-- RSA
-- ElGamal (+ signature)
-- DES
+`cifs.cpp` is a demonstration of RSA and ElGamal encryption and decryption. It is a simple program that uses the RSA and Elgamal algorithms to encrypt and decrypt messages. Written with C++ in C-style.
 
 ## Install
 To build the project, you need to have `make` and `g++` (C++17 compatible) installed on your system (or you can use your own build system). Then you can clone the repository and build the project using the following commands:
@@ -26,9 +21,9 @@ After building the project, you can run the program using the following command:
 ```
 
 ## Credits
-- [tqdm.hpp](https://github.com/mraggi/tqdm-cpp) by [mraggi](https://github.com/mraggi) - C++ single-header library for displaying progress bars in the terminal.
-- [argparse.h](https://github.com/cofyc/argparse) by [cofyc](https://github.com/cofyc) - Simple argument parser for C.
-- [Perlin-Noise-Implementation](https://github.com/Maharshi-Pandya/Perlin-Noise-Implementation) by [Maharshi-Pandya](https://github.com/Maharshi-Pandya) - Perlin noise algorithm implementation in C.
+- [tqdm.hpp](https://github.com/mraggi/tqdm-cpp) by [mraggi](https://github.com/mraggi) - [LICENSE](https://github.com/mraggi/tqdm-cpp/blob/master/LICENSE) - C++ single-header library for displaying progress bars in the terminal.
+- [argparse.h](https://github.com/cofyc/argparse) by [cofyc](https://github.com/cofyc) - [LICENSE](https://github.com/cofyc/argparse/blob/master/LICENSE) - Simple argument parser for C. 
+- [Perlin-Noise-Implementation](https://github.com/Maharshi-Pandya/Perlin-Noise-Implementation) by [Maharshi-Pandya](https://github.com/Maharshi-Pandya) - [LICENSE](https://github.com/Maharshi-Pandya/Perlin-Noise-Implementation/blob/master/LICENSE) - Perlin noise algorithm implementation in C. 
 
 ## Screenshots
 
