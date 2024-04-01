@@ -3232,6 +3232,33 @@ void test_des()
 
 #endif // TESTS_ENABLED
 
+void test_perlin_noise()
+{
+    int rows = 1024;
+    int cols = 1024;
+    float *data = ALLOC(float, rows *cols);
+
+    pn_init_rand();
+    pn_octave_noise_2d(data, rows, cols, 0.01, 8);
+
+    // print min max
+    float min = data[0];
+    float max = data[0];
+    for (int i = 0; i < rows * cols; i++)
+    {
+        if (data[i] < min)
+            min = data[i];
+        if (data[i] > max)
+            max = data[i];
+    }
+    printf("Min: %f, Max: %f\n", min, max);
+
+    save_bmp_greyscale((float *)data, cols, rows,
+                       (char *)"build/perlin_noise.bmp");
+
+    FREE(data);
+}
+
 // ===--- INTERFACE ---=========================================================
 #define __INTERFACE
 
@@ -3906,29 +3933,7 @@ void main_interface()
 /// @brief Debug function
 void dev_func()
 {
-    int rows = 1024;
-    int cols = 1024;
-    float *data = ALLOC(float, rows *cols);
-
-    pn_init_rand();
-    pn_octave_noise_2d(data, rows, cols, 0.01, 8);
-
-    // print min max
-    float min = data[0];
-    float max = data[0];
-    for (int i = 0; i < rows * cols; i++)
-    {
-        if (data[i] < min)
-            min = data[i];
-        if (data[i] > max)
-            max = data[i];
-    }
-    printf("Min: %f, Max: %f\n", min, max);
-
-    save_bmp_greyscale((float *)data, cols, rows,
-                       (char *)"build/perlin_noise.bmp");
-
-    FREE(data);
+    test_perlin_noise();
 }
 
 // ===--- </DEV> ---============================================================
