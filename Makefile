@@ -1,5 +1,5 @@
 CPPC = g++
-CFLAGS = -c -Wall -fPIC -O3 -std=c++17
+CFLAGS = -c -Wall -fPIC -std=c++17
 BUILD_DIR = build
 
 TARGET = 

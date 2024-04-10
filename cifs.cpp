@@ -776,6 +776,24 @@ void print_array(T *data, size_t data_size)
     printf("%llu}\n", (unsigned long long)data[data_size - 1]);
 }
 
+/// @brief Print array of data with given format string
+/// @tparam T
+/// @param data
+/// @param size
+/// @param fmt
+template <typename T>
+void print_array_fmt(T *data, size_t size, char *fmt)
+{
+    printf("(%lld){", size);
+    for (size_t i = 0; i < size - 1; i++)
+    {
+        printf(fmt, data[i]);
+        printf(", ");
+    }
+    printf(fmt, data[size - 1]);
+    printf("}\n");
+}
+
 /// @brief Print array of integers as ASCII characters
 /// @param data
 /// @param data_size
@@ -3048,9 +3066,9 @@ void elgsig_bench()
 
 #ifndef TESTS_ENABLED
 
-void test_rsa_array(){};
-void test_elg_array(){};
-void test_elgsig_array(){};
+void test_rsa_array() {};
+void test_elg_array() {};
+void test_elgsig_array() {};
 
 #else // TESTS_ENABLES
 
@@ -3930,10 +3948,338 @@ void main_interface()
 
 // ===--- <DEV> ---=============================================================
 
+/// @brief Rotate array to the left on n bytes.
+/// @param data
+/// @param size
+/// @param n
+void rol_byte_array(byte_t *data, size_t size, size_t n)
+{
+    byte_t *tmp = ALLOC(byte_t, size);
+    MASSERT(tmp != NULL, "Memory allocation error");
+    memcpy(tmp, data, size);
+    for (size_t i = 0; i < size; i++)
+    {
+        data[i] = tmp[(i + n) % size];
+    }
+    FREE(tmp);
+}
+
+/// @brief Rotate array to the left on n bits.
+/// @param data
+/// @param size
+/// @param n
+void rol_bit_array(byte_t *data, size_t size, size_t n)
+{
+    n = n % (size * 8); // Ensure n is within the bit size of the array
+    if (n == 0)
+        return; // If no rotation is needed, return
+
+    bool carry1 = false;
+    bool carry2 = false;
+    for (size_t i = 0; i < n; i++)
+    {
+        for (size_t j = 0; j < size; j++)
+        {
+            carry1 = data[j] & 0b10000000;
+            data[j] <<= 1;
+            if (carry2)
+                data[j] |= 0x01;
+            carry2 = carry1;
+        }
+        if (carry2)
+            data[size - 1] |= 0x01;
+        carry1 = false;
+        carry2 = false;
+    }
+}
+
+/// @brief Rotate array to the right on n bytes.
+/// @param data
+/// @param size
+/// @param n
+void ror_byte_array(byte_t *data, size_t size, size_t n)
+{
+    byte_t *tmp = ALLOC(byte_t, size);
+    MASSERT(tmp != NULL, "Memory allocation error");
+    memcpy(tmp, data, size);
+    for (size_t i = 0; i < size; i++)
+    {
+        data[i] = tmp[(i - n + size) % size];
+    }
+    FREE(tmp);
+}
+
+/// @brief Rotate full array to the right on n bits.
+/// ror on 3 = 0b1010111000101010 -> 0b0101010111000101
+/// @param data
+/// @param size
+/// @param n
+void ror_bit_array(byte_t *data, size_t size, size_t n)
+{
+    n = n % (size * 8); // Ensure n is within the bit size of the array
+    if (n == 0)
+        return; // If no rotation is needed, return
+
+    bool carry1 = false;
+    bool carry2 = false;
+    for (size_t i = 0; i < n; i++)
+    {
+        for (size_t j = 0; j < size; j++)
+        {
+            carry1 = data[j] & 0x01;
+            data[j] >>= 1;
+            if (carry2)
+                data[j] |= 0b10000000;
+            carry2 = carry1;
+        }
+        if (carry2)
+            data[0] |= 0b10000000;
+        carry1 = false;
+        carry2 = false;
+    }
+}
+
+/// @brief Resize key in a smart way.
+/// If key is bigger than new_key_size, it will be ror'd on n's byte and then
+/// cutted. If key is smaller than new_key_size, it will be filled with ror'd
+/// on n's byte key.
+/// @param input_key
+/// @param input_key_size
+/// @param new_key
+/// @param new_key_size
+void resize_key(byte_t *input_key, size_t input_key_size,
+                byte_t *new_key, size_t new_key_size)
+{
+    byte_t *input_copy = ALLOC(byte_t, input_key_size);
+    MASSERT(input_copy != NULL, "Memory allocation error");
+    memcpy(input_copy, input_key, input_key_size);
+
+    if (input_key_size == new_key_size)
+    {
+        memcpy(new_key, input_copy, new_key_size);
+    }
+    else if (input_key_size > new_key_size)
+    {
+        size_t n = input_copy[0] % input_key_size;
+        ror_bit_array(input_copy, input_key_size, n);
+        memcpy(new_key, input_copy, new_key_size);
+    }
+    else
+    {
+        // for every full input key repetition, ror it on i's byte of input key
+        // TODO: look in this *wires* and probably fix it (may be writing
+        // over other memory part)
+        std::cout << (new_key_size + input_key_size - 1) /
+                         input_key_size
+                  << std::endl;
+
+        for (size_t i = 0; i < (new_key_size + input_key_size - 1) /
+                                   input_key_size;
+             i++)
+        {
+            size_t n = (input_key[i % input_key_size] % 6) + 1;
+            ror_bit_array(input_copy, input_key_size, n);
+            std::cout << i << ": n: " << n << " - ";
+            print_array_hex_line(input_copy, input_key_size);
+            printf("\n");
+            memcpy(new_key + i * input_key_size, input_copy, input_key_size);
+        }
+    }
+    FREE(input_copy);
+}
+
+/// @brief Calculate size of 2D array's diagonal line.
+/// @param rows
+/// @param cols
+/// @return size_t Diagonal line size
+size_t calc_diag_line_size(size_t rows, size_t cols)
+{
+    return rows < cols ? rows : cols;
+}
+
+/// @brief Get diagonal line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+void get_diag_line(float *data, size_t rows, size_t cols,
+                   float *line, size_t line_size)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + i];
+    }
+}
+
+void get_alt_diag_line(float *data, size_t rows, size_t cols,
+                       float *line, size_t line_size)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + line_size - i - 1];
+    }
+}
+
+void get_comb_diag_line(float *data, size_t rows, size_t cols,
+                        float *line, size_t line_size)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + i];
+        line[i] += data[i * cols + line_size - i - 1];
+    }
+
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] /= 2;
+    }
+}
+
+/// @brief Get horizontal line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+/// @param line_num Number of line to get
+void get_hor_line(float *data, size_t rows, size_t cols,
+                  float *line, size_t line_size, size_t line_num)
+{
+    memcpy(line, data + line_num * cols, line_size * sizeof(float));
+}
+
+/// @brief Get vertical line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+/// @param line_num Number of line to get
+void get_vert_line(float *data, size_t rows, size_t cols,
+                   float *line, size_t line_size, size_t line_num)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + line_num];
+    }
+}
+
+void get_spiral_line(float *data, size_t rows, size_t cols,
+                     float *line, size_t line_size)
+{
+    size_t top = 0, bottom = rows - 1, left = 0, right = cols - 1;
+    size_t index = 0;
+
+    while (top <= bottom && left <= right && index < line_size)
+    {
+        for (size_t i = left; i <= right && index < line_size; ++i)
+        {
+            line[index++] = data[top * cols + i];
+        }
+        ++top;
+
+        for (size_t i = top; i <= bottom && index < line_size; ++i)
+        {
+            line[index++] = data[i * cols + right];
+        }
+        --right;
+
+        if (top <= bottom)
+        {
+            for (size_t i = right; i >= left && index < line_size; --i)
+            {
+                line[index++] = data[bottom * cols + i];
+            }
+            --bottom;
+        }
+
+        if (left <= right)
+        {
+            for (size_t i = bottom; i >= top && index < line_size; --i)
+            {
+                line[index++] = data[i * cols + left];
+            }
+            ++left;
+        }
+    }
+}
+
+/// @brief Normalize array to [0, 1] range.
+/// @param data
+/// @param size
+void normalize_array(float *data, size_t size)
+{
+    float min = data[0];
+    float max = data[0];
+    for (size_t i = 0; i < size; i++)
+    {
+        if (data[i] < min)
+            min = data[i];
+        if (data[i] > max)
+            max = data[i];
+    }
+    for (size_t i = 0; i < size; i++)
+    {
+        data[i] = (data[i] - min) / (max - min);
+    }
+}
+
 /// @brief Debug function
 void dev_func()
 {
-    test_perlin_noise();
+    byte_t des_key[8] = {0xb1, 0x18, 0x81, 0x38, 0xa0, 0xd7, 0xe4, 0x5f};
+
+    size_t pn_key_size = 256;
+    byte_t *pn_key = ALLOC(byte_t, pn_key_size);
+    MASSERT(pn_key != NULL, "Memory allocation error");
+
+    print_array_hex(des_key, 8);
+    print_array_hex_line(des_key, 8);
+    printf("\n");
+    resize_key(des_key, 8, pn_key, pn_key_size);
+    print_array_hex(pn_key, pn_key_size);
+
+    pn_init(pn_key);
+
+    int rows = 64;
+    int cols = 64;
+    float *data = ALLOC(float, rows *cols);
+    MASSERT(data != NULL, "Memory allocation error");
+
+    pn_octave_noise_2d(data, rows, cols, 0.3, 2);
+    normalize_array(data, rows * cols);
+
+    size_t diag_size = calc_diag_line_size(rows, cols);
+    float *diag = ALLOC(float, diag_size);
+    size_t hor_size = cols;
+    float *hor = ALLOC(float, hor_size);
+    size_t vert_size = rows;
+    float *vert = ALLOC(float, vert_size);
+    size_t spiral_size = calc_diag_line_size(rows, cols);
+    float *spiral = ALLOC(float, spiral_size);
+
+    get_comb_diag_line(data, rows, cols, diag, diag_size);
+    normalize_array(diag, diag_size);
+    print_array_fmt(diag, diag_size, (char *)"%.2f");
+
+    get_hor_line(data, rows, cols, hor, hor_size, 0);
+    normalize_array(hor, hor_size);
+    print_array_fmt(hor, hor_size, (char *)"%.2f");
+
+    get_vert_line(data, rows, cols, vert, vert_size, 0);
+    normalize_array(vert, vert_size);
+    print_array_fmt(vert, vert_size, (char *)"%.2f");
+
+    get_spiral_line(data, rows, cols, spiral, spiral_size);
+    normalize_array(spiral, spiral_size);
+    print_array_fmt(spiral, spiral_size, (char *)"%.2f");
+
+    save_bmp_greyscale((float *)data, cols, rows,
+                       (char *)"build/perlin_noise.bmp");
+
+    FREE(data);
+    FREE(pn_key);
 }
 
 // ===--- </DEV> ---============================================================
