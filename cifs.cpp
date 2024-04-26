@@ -417,6 +417,342 @@ void type_unshuffle(T *data, size_t data_size)
     //     data[i]++;
 }
 
+/// @brief Rotate array to the left on n bytes.
+/// @param data
+/// @param size
+/// @param n
+void rol_byte_array(byte_t *data, size_t size, size_t n)
+{
+    byte_t *tmp = ALLOC(byte_t, size);
+    MASSERT(tmp != NULL, "Memory allocation error");
+    memcpy(tmp, data, size);
+    for (size_t i = 0; i < size; i++)
+    {
+        data[i] = tmp[(i + n) % size];
+    }
+    FREE(tmp);
+}
+
+/// @brief Rotate array to the left on n bits.
+/// @param data
+/// @param size
+/// @param n
+void rol_bit_array(byte_t *data, size_t size, size_t n)
+{
+    n = n % (size * 8); // Ensure n is within the bit size of the array
+    if (n == 0)
+        return; // If no rotation is needed, return
+
+    bool carry1 = false;
+    bool carry2 = false;
+    for (size_t i = 0; i < n; i++)
+    {
+        for (size_t j = 0; j < size; j++)
+        {
+            carry1 = data[j] & 0b10000000;
+            data[j] <<= 1;
+            if (carry2)
+                data[j] |= 0x01;
+            carry2 = carry1;
+        }
+        if (carry2)
+            data[size - 1] |= 0x01;
+        carry1 = false;
+        carry2 = false;
+    }
+}
+
+/// @brief Rotate array to the right on n bytes.
+/// @param data
+/// @param size
+/// @param n
+void ror_byte_array(byte_t *data, size_t size, size_t n)
+{
+    byte_t *tmp = ALLOC(byte_t, size);
+    MASSERT(tmp != NULL, "Memory allocation error");
+    memcpy(tmp, data, size);
+    for (size_t i = 0; i < size; i++)
+    {
+        data[i] = tmp[(i - n + size) % size];
+    }
+    FREE(tmp);
+}
+
+/// @brief Rotate full array to the right on n bits.
+/// ror on 3 = 0b1010111000101010 -> 0b0101010111000101
+/// @param data
+/// @param size
+/// @param n
+void ror_bit_array(byte_t *data, size_t size, size_t n)
+{
+    n = n % (size * 8); // Ensure n is within the bit size of the array
+    if (n == 0)
+        return; // If no rotation is needed, return
+
+    bool carry1 = false;
+    bool carry2 = false;
+    for (size_t i = 0; i < n; i++)
+    {
+        for (size_t j = 0; j < size; j++)
+        {
+            carry1 = data[j] & 0x01;
+            data[j] >>= 1;
+            if (carry2)
+                data[j] |= 0b10000000;
+            carry2 = carry1;
+        }
+        if (carry2)
+            data[0] |= 0b10000000;
+        carry1 = false;
+        carry2 = false;
+    }
+}
+
+/// @brief Resize key in a smart way.
+/// If key is bigger than new_key_size, it will be ror'd on n's byte and then
+/// cutted. If key is smaller than new_key_size, it will be filled with ror'd
+/// on n's byte key.
+/// @param input_key
+/// @param input_key_size
+/// @param new_key
+/// @param new_key_size
+void resize_key(byte_t *input_key, size_t input_key_size,
+                byte_t *new_key, size_t new_key_size)
+{
+    byte_t *input_copy = ALLOC(byte_t, input_key_size);
+    MASSERT(input_copy != NULL, "Memory allocation error");
+    memcpy(input_copy, input_key, input_key_size);
+
+    if (input_key_size == new_key_size)
+    {
+        memcpy(new_key, input_copy, new_key_size);
+    }
+    else if (input_key_size > new_key_size)
+    {
+        size_t n = input_copy[0] % input_key_size;
+        ror_bit_array(input_copy, input_key_size, n);
+        memcpy(new_key, input_copy, new_key_size);
+    }
+    else
+    {
+        // for every full input key repetition, ror it on i's byte of input key
+        // TODO: look in this *wires* and probably fix it (may be writing
+        // over other memory part)
+        for (size_t i = 0; i < (new_key_size + input_key_size - 1) /
+                                   input_key_size;
+             i++)
+        {
+            size_t n = (input_key[i % input_key_size] % 6) + 1;
+            ror_bit_array(input_copy, input_key_size, n);
+            memcpy(new_key + i * input_key_size, input_copy, input_key_size);
+        }
+    }
+    FREE(input_copy);
+}
+
+/// @brief Calculate size of 2D array's diagonal line.
+/// @param rows
+/// @param cols
+/// @return size_t Diagonal line size
+size_t calc_diag_line_size(size_t rows, size_t cols)
+{
+    return rows < cols ? rows : cols;
+}
+
+/// @brief Get diagonal line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+void get_diag_line(float *data, size_t rows, size_t cols,
+                   float *line, size_t line_size)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + i];
+    }
+}
+
+/// @brief Get alternative diagonal line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+void get_alt_diag_line(float *data, size_t rows, size_t cols,
+                       float *line, size_t line_size)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + line_size - i - 1];
+    }
+}
+
+/// @brief Get combined diagonal line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+void get_comb_diag_line(float *data, size_t rows, size_t cols,
+                        float *line, size_t line_size)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + i];
+        line[i] += data[i * cols + line_size - i - 1];
+    }
+
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] /= 2;
+    }
+}
+
+/// @brief Get horizontal line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+/// @param line_num Number of line to get
+void get_hor_line(float *data, size_t rows, size_t cols,
+                  float *line, size_t line_size, size_t line_num)
+{
+    memcpy(line, data + line_num * cols, line_size * sizeof(float));
+}
+
+/// @brief Get vertical line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+/// @param line_num Number of line to get
+void get_vert_line(float *data, size_t rows, size_t cols,
+                   float *line, size_t line_size, size_t line_num)
+{
+    for (size_t i = 0; i < line_size; i++)
+    {
+        line[i] = data[i * cols + line_num];
+    }
+}
+
+/// @brief Get spiral line from 2D array.
+/// @param data
+/// @param rows
+/// @param cols
+/// @param line
+/// @param line_size
+void get_spiral_line(float *data, size_t rows, size_t cols,
+                     float *line, size_t line_size)
+{
+    size_t top = 0, bottom = rows - 1, left = 0, right = cols - 1;
+    size_t index = 0;
+
+    while (top <= bottom && left <= right && index < line_size)
+    {
+        for (size_t i = left; i <= right && index < line_size; ++i)
+        {
+            line[index++] = data[top * cols + i];
+        }
+        ++top;
+
+        for (size_t i = top; i <= bottom && index < line_size; ++i)
+        {
+            line[index++] = data[i * cols + right];
+        }
+        --right;
+
+        if (top <= bottom)
+        {
+            for (size_t i = right; i >= left && index < line_size; --i)
+            {
+                line[index++] = data[bottom * cols + i];
+            }
+            --bottom;
+        }
+
+        if (left <= right)
+        {
+            for (size_t i = bottom; i >= top && index < line_size; --i)
+            {
+                line[index++] = data[i * cols + left];
+            }
+            ++left;
+        }
+    }
+}
+
+/// @brief Normalize array to [0..1] range.
+/// @param data
+/// @param size
+void normalize_array(float *data, size_t size)
+{
+    float min = data[0];
+    float max = data[0];
+    for (size_t i = 0; i < size; i++)
+    {
+        if (data[i] < min)
+            min = data[i];
+        if (data[i] > max)
+            max = data[i];
+    }
+    for (size_t i = 0; i < size; i++)
+    {
+        data[i] = (data[i] - min) / (max - min);
+    }
+}
+
+/// @brief Convert float[0..1] array to int[0..255] array.
+/// @param in
+/// @param in_size
+/// @param out
+void intify_array(float *in, size_t in_size, byte_t *out)
+{
+    for (size_t i = 0; i < in_size; i++)
+    {
+        out[i] = (byte_t)(in[i] * 255);
+    }
+}
+
+bool is_array_unique(byte_t *data, size_t size)
+{
+    for (size_t i = 0; i < size; i++)
+    {
+        for (size_t j = i + 1; j < size; j++)
+        {
+            if (data[i] == data[j])
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/// @brief Make sure that array contains only unique values.
+/// If not, make them unique.
+/// @param data
+/// @param size
+void make_array_unique(byte_t *data, size_t size)
+{
+    while (!is_array_unique(data, size))
+    {
+        for (size_t i = 0; i < size; i++)
+        {
+            for (size_t j = i + 1; j < size; j++)
+            {
+                if (data[i] == data[j])
+                {
+                    data[j] = (data[j] + 1) % 256;
+                }
+            }
+        }
+    }
+}
+
 // ===--- SERVICE ---===========================================================
 #define __SERVICE
 
@@ -774,6 +1110,24 @@ void print_array(T *data, size_t data_size)
         printf("%llu, ", (unsigned long long)data[i]);
     }
     printf("%llu}\n", (unsigned long long)data[data_size - 1]);
+}
+
+/// @brief Print array of data with given format string
+/// @tparam T
+/// @param data
+/// @param size
+/// @param fmt
+template <typename T>
+void print_array_fmt(T *data, size_t size, char *fmt)
+{
+    printf("(%lld){", size);
+    for (size_t i = 0; i < size - 1; i++)
+    {
+        printf(fmt, data[i]);
+        printf(", ");
+    }
+    printf(fmt, data[size - 1]);
+    printf("}\n");
 }
 
 /// @brief Print array of integers as ASCII characters
@@ -1189,12 +1543,18 @@ void padd_data_to_chunksize(byte_t **data, size_t *data_size, size_t cap)
 
 void save_bmp_greyscale(float *data, size_t cols, size_t rows, char *filename)
 {
+    float *data_cpy = ALLOC(float, cols *rows);
+    MASSERT(data_cpy != NULL, "Memory allocation error");
+    memcpy(data_cpy, data, cols * rows * sizeof(float));
+
     FILE *f;
     unsigned char *img = NULL;
     int filesize = 54 + 3 * cols * rows;
     if (img)
-        free(img);
-    img = (unsigned char *)malloc(3 * cols * rows);
+        FREE(img);
+    img = ALLOC(unsigned char, 3 * cols * rows);
+    MASSERT(img != NULL, "Memory allocation error");
+
     memset(img, 0, 3 * cols * rows);
 
     size_t x, y;
@@ -1202,9 +1562,9 @@ void save_bmp_greyscale(float *data, size_t cols, size_t rows, char *filename)
     {
         for (y = 0; y < rows; y++)
         {
-            int r = (int)((data[y * cols + x]) * 255);
-            int g = (int)((data[y * cols + x]) * 255);
-            int b = (int)((data[y * cols + x]) * 255);
+            int r = (int)((data_cpy[y * cols + x]) * 255);
+            int g = (int)((data_cpy[y * cols + x]) * 255);
+            int b = (int)((data_cpy[y * cols + x]) * 255);
             if (r > 255)
                 r = 255;
             if (g > 255)
@@ -1248,6 +1608,8 @@ void save_bmp_greyscale(float *data, size_t cols, size_t rows, char *filename)
         fwrite(bmppad, 1, (4 - (cols * 3) % 4) % 4, f);
     }
     fclose(f);
+    FREE(img);
+    FREE(data_cpy);
 }
 
 // ===--- RSA CIPHER ---========================================================
@@ -2778,6 +3140,812 @@ void pn_octave_noise_3d(float *data, int rows, int cols, int depth,
     }
 }
 
+// ===--- DES PERLIN CIPHER ---=================================================
+#define __DES_PERLIN_CIPHER
+
+#define DES_PERLIN_ENCRYPTION_MODE 1
+#define DES_PERLIN_DECRYPTION_MODE 0
+
+class des_perlin
+{
+public:
+    des_perlin()
+    {
+    }
+
+    ~des_perlin() = default;
+
+    /// @brief Generate a random 64 bit key
+    /// @param key
+    void generate_key(byte_t *key)
+    {
+        int i;
+        for (i = 0; i < 8; i++)
+        {
+            key[i] = rand() % 255;
+        }
+    }
+
+    /// @brief Encrypt data using DES
+    /// @param data
+    /// @param data_size
+    /// @param enc_data
+    /// @param enc_data_size
+    /// @param des_key 64 bit key
+    void encrypt(byte_t *data, size_t data_size,
+                 byte_t *enc_data, size_t *enc_data_size,
+                 byte_t *des_key)
+    {
+        MASSERT(data != NULL, "data cannot be NULL");
+        MASSERT(data_size > 0, "data_size must be greater than 0");
+        MASSERT(data_size % 8 == 0, "data_size must be a multiple of 8");
+        MASSERT(enc_data != NULL, "enc_data cannot be NULL");
+        MASSERT(des_key != NULL, "des_key cannot be NULL");
+
+        byte_t *data_block = ALLOC(byte_t, 8);
+        MASSERT(data_block != NULL, "Memory allocation failed");
+
+        byte_t *processed_block = ALLOC(byte_t, 8);
+        MASSERT(processed_block != NULL, "Memory allocation failed");
+
+        key_set *key_sets = ALLOC(key_set, 17);
+        MASSERT(key_sets != NULL, "Memory allocation failed");
+
+        if (!is_tables_set || cmp_arrays(last_key, 8, des_key, 8) != 0)
+        {
+            __generate_tables(des_key);
+        }
+
+        if (!is_key_set || cmp_arrays(last_key, 8, des_key, 8) != 0)
+        {
+            __generate_sub_keys(des_key);
+        }
+
+        unsigned long number_of_blocks =
+            data_size / 8 + (data_size % 8 ? 1 : 0);
+
+        for (unsigned long block_count = 0;
+             block_count < number_of_blocks;
+             block_count++)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                data_block[i] = data[block_count * 8 + i];
+            }
+
+            __encrypt_block(data_block, processed_block, key_sets);
+
+            for (int i = 0; i < 8; i++)
+            {
+                enc_data[block_count * 8 + i] = processed_block[i];
+            }
+        }
+
+        *enc_data_size = data_size;
+        FREE(data_block);
+        FREE(processed_block);
+        FREE(key_sets);
+    }
+
+    /// @brief Decrypt data using DES
+    /// @param data
+    /// @param data_size
+    /// @param dec_data
+    /// @param dec_data_size
+    /// @param des_key 64 bit key
+    void decrypt(byte_t *data, size_t data_size,
+                 byte_t *dec_data, size_t *dec_data_size,
+                 byte_t *des_key)
+    {
+        MASSERT(data != NULL, "data cannot be NULL");
+        MASSERT(data_size > 0, "data_size must be greater than 0");
+        MASSERT(data_size % 8 == 0, "data_size must be a multiple of 8");
+        MASSERT(dec_data != NULL, "dec_data cannot be NULL");
+        MASSERT(des_key != NULL, "des_key cannot be NULL");
+
+        byte_t *data_block = ALLOC(byte_t, 8);
+        MASSERT(data_block != NULL, "Memory allocation failed");
+
+        byte_t *processed_block = ALLOC(byte_t, 8);
+        MASSERT(processed_block != NULL, "Memory allocation failed");
+
+        key_set *key_sets = ALLOC(key_set, 17);
+        MASSERT(key_sets != NULL, "Memory allocation failed");
+
+        if (!is_tables_set || cmp_arrays(last_key, 8, des_key, 8) != 0)
+        {
+            __generate_tables(des_key);
+        }
+
+        if (!is_key_set || cmp_arrays(last_key, 8, des_key, 8) != 0)
+        {
+            __generate_sub_keys(des_key);
+        }
+
+        unsigned long number_of_blocks =
+            data_size / 8 + (data_size % 8 ? 1 : 0);
+
+        for (unsigned long block_count = 0;
+             block_count < number_of_blocks;
+             block_count++)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                data_block[i] = data[block_count * 8 + i];
+            }
+
+            __decrypt_block(data_block, processed_block, key_sets);
+
+            for (int i = 0; i < 8; i++)
+            {
+                dec_data[block_count * 8 + i] = processed_block[i];
+            }
+        }
+
+        *dec_data_size = data_size;
+        FREE(data_block);
+        FREE(processed_block);
+        FREE(key_sets);
+    }
+
+private:
+    class key_set
+    {
+    public:
+        byte_t k[8];
+        byte_t c[4];
+        byte_t d[4];
+    };
+    // unique
+    byte_t __initial_key_permutaion[56];
+
+    // unique
+    // Initial permutation (IP)
+    byte_t __initial_message_permutation[64];
+
+    // 17
+    int __key_shift_sizes[17] = {-1,
+                                 1, 1, 2, 2, 2, 2, 2, 2,
+                                 1, 2, 2, 2, 2, 2, 2, 1};
+
+    // unique
+    // Subkey permutation
+    byte_t __sub_key_permutation[48];
+
+    // Expansion table (E)
+    byte_t __message_expansion[48];
+
+    // S_i transformation tables
+    byte_t __S1[64];
+    byte_t __S2[64];
+    byte_t __S3[64];
+    byte_t __S4[64];
+    byte_t __S5[64];
+    byte_t __S6[64];
+    byte_t __S7[64];
+    byte_t __S8[64];
+
+    // unique
+    // Permutation table (P)
+    byte_t __right_sub_msg_permut[32];
+
+    // unique
+    // Final permutation (IP^-1)
+    byte_t __final_msg_permut[64];
+
+    bool is_key_set = false;
+    bool is_tables_set = false;
+
+    byte_t last_key[8];
+    key_set key_sets[17];
+
+    /// @brief Generate 16(+1) sub keys from the main key
+    /// @param main_key 64 bit key
+    /// @param key_sets array of (+1)16 key sets
+    void __generate_sub_keys(byte_t *main_key)
+    {
+        int i, j;
+        int shift_size;
+        byte_t shift_byte,
+            first_shift_bits,
+            second_shift_bits,
+            third_shift_bits,
+            fourth_shift_bits;
+
+        // Zero out first key set's k
+        for (i = 0; i < 8; i++)
+        {
+            key_sets[0].k[i] = 0;
+        }
+
+        for (j = 1; j < 17; j++)
+        {
+            for (i = 0; i < 8; i++)
+            {
+                key_sets[j].k[i] = 0;
+            }
+        }
+
+        // Generate first key set's k
+        for (i = 0; i < 56; i++)
+        {
+            shift_size = __initial_key_permutaion[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= main_key[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            key_sets[0].k[i / 8] |= (shift_byte >> i % 8);
+        }
+
+        // Copy first 3 bytes of k to c
+        for (i = 0; i < 3; i++)
+        {
+            key_sets[0].c[i] = key_sets[0].k[i];
+        }
+
+        // Copy last byte of k to c and mask it
+        key_sets[0].c[3] = key_sets[0].k[3] & 0xF0;
+
+        // Copy last 4 bytes of k to d
+        for (i = 0; i < 3; i++)
+        {
+            key_sets[0].d[i] = (key_sets[0].k[i + 3] & 0x0F) << 4;
+            key_sets[0].d[i] |= (key_sets[0].k[i + 4] & 0xF0) >> 4;
+        }
+
+        // Mask last byte of d
+        key_sets[0].d[3] = (key_sets[0].k[6] & 0x0F) << 4;
+
+        // Generate 16 sub keys
+        for (i = 1; i < 17; i++)
+        {
+            // Copy previous key set to current
+            for (j = 0; j < 4; j++)
+            {
+                key_sets[i].c[j] = key_sets[i - 1].c[j];
+                key_sets[i].d[j] = key_sets[i - 1].d[j];
+            }
+
+            shift_size = __key_shift_sizes[i];
+            if (shift_size == 1)
+            {
+                shift_byte = 0x80;
+            }
+            else
+            {
+                shift_byte = 0xC0;
+            }
+
+            // Process C
+            first_shift_bits = shift_byte & key_sets[i].c[0];
+            second_shift_bits = shift_byte & key_sets[i].c[1];
+            third_shift_bits = shift_byte & key_sets[i].c[2];
+            fourth_shift_bits = shift_byte & key_sets[i].c[3];
+
+            key_sets[i].c[0] <<= shift_size;
+            key_sets[i].c[0] |= (second_shift_bits >> (8 - shift_size));
+
+            key_sets[i].c[1] <<= shift_size;
+            key_sets[i].c[1] |= (third_shift_bits >> (8 - shift_size));
+
+            key_sets[i].c[2] <<= shift_size;
+            key_sets[i].c[2] |= (fourth_shift_bits >> (8 - shift_size));
+
+            key_sets[i].c[3] <<= shift_size;
+            key_sets[i].c[3] |= (first_shift_bits >> (4 - shift_size));
+
+            // Process D
+            first_shift_bits = shift_byte & key_sets[i].d[0];
+            second_shift_bits = shift_byte & key_sets[i].d[1];
+            third_shift_bits = shift_byte & key_sets[i].d[2];
+            fourth_shift_bits = shift_byte & key_sets[i].d[3];
+
+            key_sets[i].d[0] <<= shift_size;
+            key_sets[i].d[0] |= (second_shift_bits >> (8 - shift_size));
+
+            key_sets[i].d[1] <<= shift_size;
+            key_sets[i].d[1] |= (third_shift_bits >> (8 - shift_size));
+
+            key_sets[i].d[2] <<= shift_size;
+            key_sets[i].d[2] |= (fourth_shift_bits >> (8 - shift_size));
+
+            key_sets[i].d[3] <<= shift_size;
+            key_sets[i].d[3] |= (first_shift_bits >> (4 - shift_size));
+
+            // Merge C and D to generate K
+            for (j = 0; j < 48; j++)
+            {
+                shift_size = __sub_key_permutation[j];
+                if (shift_size <= 28)
+                {
+                    shift_byte = 0x80 >> ((shift_size - 1) % 8);
+                    shift_byte &= key_sets[i].c[(shift_size - 1) / 8];
+                    shift_byte <<= ((shift_size - 1) % 8);
+                }
+                else
+                {
+                    shift_byte = 0x80 >> ((shift_size - 29) % 8);
+                    shift_byte &= key_sets[i].d[(shift_size - 29) / 8];
+                    shift_byte <<= ((shift_size - 29) % 8);
+                }
+
+                key_sets[i].k[j / 8] |= (shift_byte >> j % 8);
+            }
+        }
+        is_key_set = true;
+    }
+
+    /// @brief Process a 64 bit block of data using DES
+    /// @param data_block
+    /// @param processed_block
+    /// @param key_sets array of 16(+1) key sets
+    /// @param mode 1 for encryption, 0 for decryption
+    void __process_data_block(byte_t *data_block,
+                              byte_t *processed_block,
+                              key_set *key_sets,
+                              int mode)
+    {
+        int i, k;
+        int shift_size;
+        byte_t shift_byte;
+
+        byte_t initial_permutation[8];
+        memset(initial_permutation, 0, 8);
+        memset(processed_block, 0, 8);
+
+        // Initial permutation
+        for (i = 0; i < 64; i++)
+        {
+            shift_size = __initial_message_permutation[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= data_block[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            initial_permutation[i / 8] |= (shift_byte >> i % 8);
+        }
+
+        // Split message into two 32-bit pieces
+        byte_t l[4], r[4];
+        for (i = 0; i < 4; i++)
+        {
+            l[i] = initial_permutation[i];
+            r[i] = initial_permutation[i + 4];
+        }
+
+        byte_t ln[4], rn[4], er[6], ser[4];
+
+        // 16 rounds of Feistel network
+        int key_index;
+        for (k = 1; k <= 16; k++)
+        {
+            memcpy(ln, r, 4);
+            memset(er, 0, 6);
+
+            // Expansion permutation (E)
+            for (i = 0; i < 48; i++)
+            {
+                shift_size = __message_expansion[i];
+                shift_byte = 0x80 >> ((shift_size - 1) % 8);
+                shift_byte &= r[(shift_size - 1) / 8];
+                shift_byte <<= ((shift_size - 1) % 8);
+
+                er[i / 8] |= (shift_byte >> i % 8);
+            }
+
+            // If decryption mode, use keys in reverse order
+            if (mode == DES_PERLIN_DECRYPTION_MODE)
+            {
+                key_index = 17 - k;
+            }
+            else
+            {
+                key_index = k;
+            }
+
+            // XOR with key
+            for (i = 0; i < 6; i++)
+            {
+                er[i] ^= key_sets[key_index].k[i];
+            }
+
+            byte_t row, column;
+
+            for (i = 0; i < 4; i++)
+            {
+                ser[i] = 0;
+            }
+
+            // S-Box substitution
+
+            // 0000 0000 0000 0000 0000 0000
+            // rccc crrc cccr rccc crrc cccr
+
+            // Byte 1
+            row = 0;
+            row |= ((er[0] & 0x80) >> 6);
+            row |= ((er[0] & 0x04) >> 2);
+
+            column = 0;
+            column |= ((er[0] & 0x78) >> 3);
+
+            ser[0] |= ((byte_t)__S1[row * 16 + column] << 4);
+
+            row = 0;
+            row |= (er[0] & 0x02);
+            row |= ((er[1] & 0x10) >> 4);
+
+            column = 0;
+            column |= ((er[0] & 0x01) << 3);
+            column |= ((er[1] & 0xE0) >> 5);
+
+            ser[0] |= (byte_t)__S2[row * 16 + column];
+
+            // Byte 2
+            row = 0;
+            row |= ((er[1] & 0x08) >> 2);
+            row |= ((er[2] & 0x40) >> 6);
+
+            column = 0;
+            column |= ((er[1] & 0x07) << 1);
+            column |= ((er[2] & 0x80) >> 7);
+
+            ser[1] |= ((byte_t)__S3[row * 16 + column] << 4);
+
+            row = 0;
+            row |= ((er[2] & 0x20) >> 4);
+            row |= (er[2] & 0x01);
+
+            column = 0;
+            column |= ((er[2] & 0x1E) >> 1);
+
+            ser[1] |= (byte_t)__S4[row * 16 + column];
+
+            // Byte 3
+            row = 0;
+            row |= ((er[3] & 0x80) >> 6);
+            row |= ((er[3] & 0x04) >> 2);
+
+            column = 0;
+            column |= ((er[3] & 0x78) >> 3);
+
+            ser[2] |= ((byte_t)__S5[row * 16 + column] << 4);
+
+            row = 0;
+            row |= (er[3] & 0x02);
+            row |= ((er[4] & 0x10) >> 4);
+
+            column = 0;
+            column |= ((er[3] & 0x01) << 3);
+            column |= ((er[4] & 0xE0) >> 5);
+
+            ser[2] |= (byte_t)__S6[row * 16 + column];
+
+            // Byte 4
+            row = 0;
+            row |= ((er[4] & 0x08) >> 2);
+            row |= ((er[5] & 0x40) >> 6);
+
+            column = 0;
+            column |= ((er[4] & 0x07) << 1);
+            column |= ((er[5] & 0x80) >> 7);
+
+            ser[3] |= ((byte_t)__S7[row * 16 + column] << 4);
+
+            row = 0;
+            row |= ((er[5] & 0x20) >> 4);
+            row |= (er[5] & 0x01);
+
+            column = 0;
+            column |= ((er[5] & 0x1E) >> 1);
+
+            ser[3] |= (byte_t)__S8[row * 16 + column];
+
+            for (i = 0; i < 4; i++)
+            {
+                rn[i] = 0;
+            }
+
+            // Straight permutation (P)
+            for (i = 0; i < 32; i++)
+            {
+                shift_size = __right_sub_msg_permut[i];
+                shift_byte = 0x80 >> ((shift_size - 1) % 8);
+                shift_byte &= ser[(shift_size - 1) / 8];
+                shift_byte <<= ((shift_size - 1) % 8);
+
+                rn[i / 8] |= (shift_byte >> i % 8);
+            }
+
+            for (i = 0; i < 4; i++)
+            {
+                rn[i] ^= l[i];
+            }
+
+            for (i = 0; i < 4; i++)
+            {
+                l[i] = ln[i];
+                r[i] = rn[i];
+            }
+        }
+
+        // Combine R and L, pre-end permutation
+        byte_t pre_end_permutation[8];
+        for (i = 0; i < 4; i++)
+        {
+            pre_end_permutation[i] = r[i];
+            pre_end_permutation[4 + i] = l[i];
+        }
+
+        for (i = 0; i < 64; i++)
+        {
+            shift_size = __final_msg_permut[i];
+            shift_byte = 0x80 >> ((shift_size - 1) % 8);
+            shift_byte &= pre_end_permutation[(shift_size - 1) / 8];
+            shift_byte <<= ((shift_size - 1) % 8);
+
+            processed_block[i / 8] |= (shift_byte >> i % 8);
+        }
+    }
+
+    /// @brief Encrypt a 64 bit block of data using DES
+    /// @param data_block
+    /// @param processed_block
+    /// @param key_sets array of 16(+1) key sets
+    void __encrypt_block(byte_t *data_block,
+                         byte_t *processed_block,
+                         key_set *key_sets)
+    {
+        __process_data_block(data_block,
+                             processed_block,
+                             key_sets,
+                             DES_PERLIN_ENCRYPTION_MODE);
+    }
+
+    /// @brief Decrypt a 64 bit block of data using DES
+    /// @param data_block
+    /// @param processed_block
+    /// @param key_sets array of 16(+1) key sets
+    void __decrypt_block(byte_t *data_block,
+                         byte_t *processed_block,
+                         key_set *key_sets)
+    {
+        __process_data_block(data_block,
+                             processed_block,
+                             key_sets,
+                             DES_PERLIN_DECRYPTION_MODE);
+    }
+
+    /// @brief Check if array contains unique values between 1 and "size".
+    /// @param data
+    /// @param size
+    /// @return
+    bool is_key_acceptable(byte_t *data, size_t size)
+    {
+        for (size_t i = 0; i < size; i++)
+        {
+            if (data[i] < 1 || data[i] > size)
+            {
+                return false;
+            }
+        }
+
+        for (size_t i = 0; i < size; i++)
+        {
+            for (size_t j = i + 1; j < size; j++)
+            {
+                if (data[i] == data[j])
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// @brief Remap key data, so it contaions all values between 1 and "size".
+    /// Use current data as orders
+    /// @param data
+    /// @param size
+    void make_key_acceptable(byte_t *data, size_t size)
+    {
+        while (!is_key_acceptable(data, size))
+        {
+            // find lowest and replace it with 1
+            byte_t lowest = 255;
+            for (size_t i = 0; i < size; i++)
+            {
+                if (data[i] < lowest)
+                {
+                    lowest = data[i];
+                }
+            }
+
+            for (size_t i = 0; i < size; i++)
+            {
+                data[i] = (data[i] - lowest) + 1;
+            }
+
+            // find highest and replace it with size
+            byte_t highest = 0;
+            for (size_t i = 0; i < size; i++)
+            {
+                if (data[i] > highest)
+                {
+                    highest = data[i];
+                }
+            }
+
+            for (size_t i = 0; i < size; i++)
+            {
+                data[i] = (data[i] * size) / highest;
+            }
+
+            for (size_t i = 0; i < size; i++)
+            {
+                if (data[i] == 0)
+                {
+                    data[i] = 1;
+                }
+            }
+
+            // make unique
+            make_array_unique(data, size);
+        }
+    }
+
+    void __generate_tables(byte_t *key)
+    {
+
+        // 56 + 64 + 48 + 48 + 64 * 8 + 32 + 64 = 824 bytes
+        float perlin_buffer[1024];
+        byte_t int_perlin_buffer[1024];
+        memset(perlin_buffer, 0, 1024 * sizeof(float));
+
+        byte_t expanded_key[256];
+        resize_key(key, 8, expanded_key, 256);
+        pn_init(expanded_key);
+        pn_octave_noise_2d(perlin_buffer, 32, 32, 0.3, 2);
+        normalize_array(perlin_buffer, 1024);
+
+        // save_bmp_greyscale(perlin_buffer, 32, 32,
+        //    (char *)"build/perlin_noise.bmp");
+
+        intify_array(perlin_buffer, 1024, int_perlin_buffer);
+
+        // unique?
+        memcpy(__initial_key_permutaion, int_perlin_buffer, 56);
+        make_key_acceptable(__initial_key_permutaion, 56);
+        // memcpy(__initial_key_permutaion, __des_initial_key_permutaion, 56);
+
+        // unique?
+        memcpy(__initial_message_permutation, int_perlin_buffer + 56, 64);
+        make_key_acceptable(__initial_message_permutation, 64);
+        memcpy(__initial_message_permutation,
+               __des_initial_message_permutation, 64.);
+
+        // unique?
+        memcpy(__sub_key_permutation, int_perlin_buffer + 120, 48);
+        make_key_acceptable(__sub_key_permutation, 48);
+        // memcpy(__sub_key_permutation, __des_sub_key_permutation, 48);
+
+        memcpy(__message_expansion, int_perlin_buffer + 168, 48);
+        // make_key_acceptable(__message_expansion, 48);
+        memcpy(__message_expansion, __des_message_expansion, 48);
+
+        memcpy(__S1, int_perlin_buffer + 216, 64);
+        make_key_acceptable(__S1, 64);
+        memcpy(__S2, int_perlin_buffer + 280, 64);
+        make_key_acceptable(__S2, 64);
+        memcpy(__S3, int_perlin_buffer + 344, 64);
+        make_key_acceptable(__S3, 64);
+        memcpy(__S4, int_perlin_buffer + 408, 64);
+        make_key_acceptable(__S4, 64);
+        memcpy(__S5, int_perlin_buffer + 472, 64);
+        make_key_acceptable(__S5, 64);
+        memcpy(__S6, int_perlin_buffer + 536, 64);
+        make_key_acceptable(__S6, 64);
+        memcpy(__S7, int_perlin_buffer + 600, 64);
+        make_key_acceptable(__S7, 64);
+        memcpy(__S8, int_perlin_buffer + 664, 64);
+        make_key_acceptable(__S8, 64);
+
+        // unique?
+        memcpy(__right_sub_msg_permut, int_perlin_buffer + 728, 32);
+        make_key_acceptable(__right_sub_msg_permut, 32);
+        // memcpy(__right_sub_msg_permut, __des_right_sub_msg_permut, 32);
+
+        // unique?
+        memcpy(__final_msg_permut, int_perlin_buffer + 760, 64);
+        make_key_acceptable(__final_msg_permut, 64);
+        memcpy(__final_msg_permut, __des_final_msg_permut, 64);
+
+        // printf("\n");
+        // print_array_hex_line(key, 8);
+        // printf("\n");
+        // memcpy(key, int_perlin_buffer + 824, 8);
+        // print_array_hex_line(key, 8);
+        // printf("\n");
+
+        bool verbose_sets = 0;
+        if (verbose_sets)
+        {
+            printf("\n");
+            print_array_hex_line(__initial_key_permutaion, 56);
+            printf("\n");
+            print_array_hex_line(__des_initial_key_permutaion, 56);
+            printf("\n");
+
+            print_array_hex_line(__initial_message_permutation, 64);
+            printf("\n");
+            print_array_hex_line(__des_initial_message_permutation, 64);
+            printf("\n");
+
+            print_array_hex_line(__sub_key_permutation, 48);
+            printf("\n");
+            print_array_hex_line(__des_sub_key_permutation, 48);
+            printf("\n");
+
+            print_array_hex_line(__message_expansion, 48);
+            printf("\n");
+            print_array_hex_line(__des_message_expansion, 48);
+            printf("\n");
+
+            print_array_hex_line(__S1, 64);
+            printf("\n");
+            print_array_hex_line(__des_S1, 64);
+            printf("\n");
+
+            print_array_hex_line(__S2, 64);
+            printf("\n");
+            print_array_hex_line(__des_S2, 64);
+            printf("\n");
+
+            print_array_hex_line(__S3, 64);
+            printf("\n");
+            print_array_hex_line(__des_S3, 64);
+            printf("\n");
+
+            print_array_hex_line(__S4, 64);
+            printf("\n");
+            print_array_hex_line(__des_S4, 64);
+            printf("\n");
+
+            print_array_hex_line(__S5, 64);
+            printf("\n");
+            print_array_hex_line(__des_S5, 64);
+            printf("\n");
+
+            print_array_hex_line(__S6, 64);
+            printf("\n");
+            print_array_hex_line(__des_S6, 64);
+            printf("\n");
+
+            print_array_hex_line(__S7, 64);
+            printf("\n");
+            print_array_hex_line(__des_S7, 64);
+            printf("\n");
+
+            print_array_hex_line(__S8, 64);
+            printf("\n");
+            print_array_hex_line(__des_S8, 64);
+            printf("\n");
+
+            print_array_hex_line(__right_sub_msg_permut, 32);
+            printf("\n");
+            print_array_hex_line(__des_right_sub_msg_permut, 32);
+            printf("\n");
+
+            print_array_hex_line(__final_msg_permut, 64);
+            printf("\n");
+            print_array_hex_line(__des_final_msg_permut, 64);
+            printf("\n");
+            printf("\n");
+        }
+        is_tables_set = true;
+    }
+};
+
 // ===--- BENCHMARKS ---========================================================
 #define __BENCHMARKS
 
@@ -3048,9 +4216,9 @@ void elgsig_bench()
 
 #ifndef TESTS_ENABLED
 
-void test_rsa_array(){};
-void test_elg_array(){};
-void test_elgsig_array(){};
+void test_rsa_array() {};
+void test_elg_array() {};
+void test_elgsig_array() {};
 
 #else // TESTS_ENABLES
 
@@ -3231,6 +4399,33 @@ void test_des()
 }
 
 #endif // TESTS_ENABLED
+
+void test_perlin_noise()
+{
+    int rows = 1024;
+    int cols = 1024;
+    float *data = ALLOC(float, rows *cols);
+
+    pn_init_rand();
+    pn_octave_noise_2d(data, rows, cols, 0.01, 8);
+
+    // print min max
+    float min = data[0];
+    float max = data[0];
+    for (int i = 0; i < rows * cols; i++)
+    {
+        if (data[i] < min)
+            min = data[i];
+        if (data[i] > max)
+            max = data[i];
+    }
+    printf("Min: %f, Max: %f\n", min, max);
+
+    save_bmp_greyscale((float *)data, cols, rows,
+                       (char *)"build/perlin_noise.bmp");
+
+    FREE(data);
+}
 
 // ===--- INTERFACE ---=========================================================
 #define __INTERFACE
@@ -3906,29 +5101,147 @@ void main_interface()
 /// @brief Debug function
 void dev_func()
 {
-    int rows = 1024;
-    int cols = 1024;
-    float *data = ALLOC(float, rows *cols);
+    byte_t des_key[8] = {0xb1, 0x18, 0x81, 0x38, 0xa0, 0xd7, 0xe4, 0x5f};
 
-    pn_init_rand();
-    pn_octave_noise_2d(data, rows, cols, 0.01, 8);
+    byte_t data[32] = {0xb1, 0x18, 0x38, 0xa0, 0xd7, 0xe4, 0x5f, 0x18, 0x18,
+                       0x38, 0xa0, 0xd7, 0xe4, 0x5f, 0x18, 0x18, 0x38, 0xa0,
+                       0xd7, 0xe4, 0x5f, 0x18, 0x18, 0x38, 0xa0, 0xd7, 0xe4,
+                       0x5f, 0x18, 0x18, 0x38, 0xa0};
+    size_t data_size = 32;
 
-    // print min max
-    float min = data[0];
-    float max = data[0];
-    for (int i = 0; i < rows * cols; i++)
-    {
-        if (data[i] < min)
-            min = data[i];
-        if (data[i] > max)
-            max = data[i];
-    }
-    printf("Min: %f, Max: %f\n", min, max);
+    byte_t *enc = ALLOC(byte_t, data_size);
+    MASSERT(enc != NULL, "Memory allocation error");
+    size_t enc_size;
 
-    save_bmp_greyscale((float *)data, cols, rows,
-                       (char *)"build/perlin_noise.bmp");
+    std::cout << C_CYAN "Original data: " C_RESET << std::endl;
+    print_array_hex(data, data_size);
 
-    FREE(data);
+    des_perlin dpn;
+    dpn.encrypt(data, data_size, enc, &enc_size, des_key);
+    // des_encrypt(data, data_size, enc, &enc_size, des_key);
+
+    std::cout << C_CYAN "Encrypted data: " C_RESET << std::endl;
+    print_array_hex(enc, enc_size);
+
+    dpn.decrypt(enc, enc_size, data, &data_size, des_key);
+    // des_decrypt(enc, enc_size, data, &data_size, des_key);
+
+    std::cout << C_CYAN "Decrypted data: " C_RESET << std::endl;
+    print_array_hex(data, data_size);
+
+    //
+    // byte_t key64[8] = {0x03, 0x61, 0x07, 0x22, 0x3B, 0xC7, 0x70, 0xD7};
+
+    // byte_t key512[64] = {0x03, 0x61, 0x07, 0x22, 0x3B, 0xC7, 0x70, 0xD7,
+    //                      0x8D, 0x8B, 0xC7, 0x78, 0x0A, 0x0D, 0x27, 0xAC,
+    //                      0x7A, 0x5D, 0x0D, 0xD0, 0xDC, 0x54, 0x1C, 0x70,
+    //                      0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                      0x63, 0x83, 0x99, 0x06, 0xB6, 0xDC, 0x4A, 0x8A,
+    //                      0x0A, 0x27, 0xC5, 0xFF, 0x51, 0xC6, 0x86, 0xBC,
+    //                      0xCA, 0xBE, 0xC6, 0xAF, 0xB6, 0x02, 0xF6, 0x09,
+    //                      0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE};
+
+    // byte_t key4096[256] = {0x03, 0x61, 0x07, 0x22, 0x3B, 0xC7, 0x70, 0xD7,
+    //                        0x8D, 0x8B, 0xC7, 0x78, 0x0A, 0x0D, 0x27, 0xAC,
+    //                        0x7A, 0x5D, 0x0D, 0xD0, 0xDC, 0x54, 0x1C, 0x70,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x63, 0x83, 0x99, 0x06, 0xB6, 0xDC, 0x4A, 0x8A,
+    //                        0x0A, 0x27, 0xC5, 0xFF, 0x51, 0xC6, 0x86, 0xBC,
+    //                        0xCA, 0xBE, 0xC6, 0xAF, 0xB6, 0x02, 0xF6, 0x09,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x03, 0x61, 0x07, 0x22, 0x3B, 0xC7, 0x70, 0xD7,
+    //                        0x8D, 0x8B, 0xC7, 0x78, 0x0A, 0x0D, 0x27, 0xAC,
+    //                        0x7A, 0x5D, 0x0D, 0xD0, 0xDC, 0x54, 0x1C, 0x70,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x63, 0x83, 0x99, 0x06, 0xB6, 0xDC, 0x4A, 0x8A,
+    //                        0x0A, 0x27, 0xC5, 0xFF, 0x51, 0xC6, 0x86, 0xBC,
+    //                        0xCA, 0xBE, 0xC6, 0xAF, 0xB6, 0x02, 0xF6, 0x09,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x03, 0x61, 0x07, 0x22, 0x3B, 0xC7, 0x70, 0xD7,
+    //                        0x8D, 0x8B, 0xC7, 0x78, 0x0A, 0x0D, 0x27, 0xAC,
+    //                        0x7A, 0x5D, 0x0D, 0xD0, 0xDC, 0x54, 0x1C, 0x70,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x63, 0x83, 0x99, 0x06, 0xB6, 0xDC, 0x4A, 0x8A,
+    //                        0x0A, 0x27, 0xC5, 0xFF, 0x51, 0xC6, 0x86, 0xBC,
+    //                        0xCA, 0xBE, 0xC6, 0xAF, 0xB6, 0x02, 0xF6, 0x09,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x03, 0x61, 0x07, 0x22, 0x3B, 0xC7, 0x70, 0xD7,
+    //                        0x8D, 0x8B, 0xC7, 0x78, 0x0A, 0x0D, 0x27, 0xAC,
+    //                        0x7A, 0x5D, 0x0D, 0xD0, 0xDC, 0x54, 0x1C, 0x70,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE,
+    //                        0x63, 0x83, 0x99, 0x06, 0xB6, 0xDC, 0x4A, 0x8A,
+    //                        0x0A, 0x27, 0xC5, 0xFF, 0x51, 0xC6, 0x86, 0xBC,
+    //                        0xCA, 0xBE, 0xC6, 0xAF, 0xB6, 0x02, 0xF6, 0x09,
+    //                        0x45, 0xEB, 0x50, 0xF4, 0x87, 0xA7, 0x88, 0xAE};
+
+    // float perlin_buffer[1024];
+    // byte_t int_perlin_buffer[1024];
+    // memset(perlin_buffer, 0, 1024 * sizeof(float));
+
+    // byte_t expanded_key[256];
+    // resize_key(key4096, 256, expanded_key, 256);
+    // pn_init(expanded_key);
+    // pn_octave_noise_2d(perlin_buffer, 32, 32, 0.3, 2);
+    // normalize_array(perlin_buffer, 1024);
+
+    // // save_bmp_greyscale(perlin_buffer, 32, 32,
+    // //    (char *)"build/perlin_noise.bmp");
+
+    // intify_array(perlin_buffer, 1024, int_perlin_buffer);
+
+    // std::cout << "PN[64]: ";
+    // print_array_hex(int_perlin_buffer, 1024);
+
+    // size_t pn_key_size = 256;
+    // byte_t *pn_key = ALLOC(byte_t, pn_key_size);
+    // MASSERT(pn_key != NULL, "Memory allocation error");
+
+    // print_array_hex(des_key, 8);
+    // print_array_hex_line(des_key, 8);
+    // printf("\n");
+    // resize_key(des_key, 8, pn_key, pn_key_size);
+    // print_array_hex(pn_key, pn_key_size);
+
+    // pn_init(pn_key);
+
+    // int rows = 64;
+    // int cols = 64;
+    // float *data = ALLOC(float, rows *cols);
+    // MASSERT(data != NULL, "Memory allocation error");
+
+    // pn_octave_noise_2d(data, rows, cols, 0.3, 2);
+    // normalize_array(data, rows * cols);
+
+    // size_t diag_size = calc_diag_line_size(rows, cols);
+    // float *diag = ALLOC(float, diag_size);
+    // size_t hor_size = cols;
+    // float *hor = ALLOC(float, hor_size);
+    // size_t vert_size = rows;
+    // float *vert = ALLOC(float, vert_size);
+    // size_t spiral_size = calc_diag_line_size(rows, cols);
+    // float *spiral = ALLOC(float, spiral_size);
+
+    // get_comb_diag_line(data, rows, cols, diag, diag_size);
+    // normalize_array(diag, diag_size);
+    // print_array_fmt(diag, diag_size, (char *)"%.2f");
+
+    // get_hor_line(data, rows, cols, hor, hor_size, 0);
+    // normalize_array(hor, hor_size);
+    // print_array_fmt(hor, hor_size, (char *)"%.2f");
+
+    // get_vert_line(data, rows, cols, vert, vert_size, 0);
+    // normalize_array(vert, vert_size);
+    // print_array_fmt(vert, vert_size, (char *)"%.2f");
+
+    // get_spiral_line(data, rows, cols, spiral, spiral_size);
+    // normalize_array(spiral, spiral_size);
+    // print_array_fmt(spiral, spiral_size, (char *)"%.2f");
+
+    // save_bmp_greyscale((float *)data, cols, rows,
+    //                    (char *)"build/perlin_noise.bmp");
+
+    // FREE(data);
+    // FREE(pn_key);
 }
 
 // ===--- </DEV> ---============================================================
